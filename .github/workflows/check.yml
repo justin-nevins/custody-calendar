@@ -1,0 +1,35 @@
+name: check
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Inline script syntax
+        run: |
+          node -e '
+            const fs = require("fs");
+            const html = fs.readFileSync("index.html", "utf8");
+            const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+            if (!scripts.length) { console.error("no inline script found"); process.exit(1); }
+            fs.writeFileSync("/tmp/inline.js", scripts.join("\n"));
+            for (const tag of ["<title>", "</body>", "</html>"]) if (!html.includes(tag)) { console.error("missing " + tag); process.exit(1); }
+            console.log("found", scripts.length, "script block(s)");
+          '
+          node --check /tmp/inline.js
+      - name: HTML parses
+        run: |
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          class P(HTMLParser):
+              def __init__(s): super().__init__(); s.depth=0
+          p=P(); p.feed(open('index.html',encoding='utf8').read()); p.close(); print('html ok')
+          PY
+      - name: Pages files present
+        run: test -f CNAME && test -f .nojekyll && grep -qx 'custody-calendar.com' CNAME
