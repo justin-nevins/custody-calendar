@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Custody Calendar - Rotating Schedule Planner</title>
+<meta name="description" content="Plan a rotating long distance custody cycle with holidays, see every exchange date, and save it as a calendar file.">
+</head>
+<body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: control panel on top (wraps to one column on phones), summary table, flagged list, then 12-month grids per year. */
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#1c2230; --muted:#5b6474; --line:#d6dbe3;
+  --mother:#b4457f; --mother-soft:#f3dde9; --father:#1f7a6d; --father-soft:#d6ece7;
+  --flag:#b3261e; --flag-soft:#f9dcd9; --hol:#8a6d00; --focus:#2457c5;
+  --body:'Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ color-scheme:dark;
+    --bg:#15181e; --panel:#1e232b; --ink:#e7eaf0; --muted:#9aa3b2; --line:#343b47;
+    --mother:#e07ab3; --mother-soft:#4a2638; --father:#4fc3b0; --father-soft:#1f3f3a;
+    --flag:#ff7b6e; --flag-soft:#4a2320; --hol:#e3c35a; --focus:#7aa2ff; }
+}
+:root[data-theme="dark"]{ color-scheme:dark;
+  --bg:#15181e; --panel:#1e232b; --ink:#e7eaf0; --muted:#9aa3b2; --line:#343b47;
+  --mother:#e07ab3; --mother-soft:#4a2638; --father:#4fc3b0; --father-soft:#1f3f3a;
+  --flag:#ff7b6e; --flag-soft:#4a2320; --hol:#e3c35a; --focus:#7aa2ff; }
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--body);
+  padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-size:1.5rem;margin:0 0 4px;text-wrap:balance}
+h2{font-size:1.05rem;margin:0 0 10px}
+.sub{color:var(--muted);margin:0 0 18px;max-width:65ch}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px 20px}
+fieldset{border:0;padding:0;margin:0;display:grid;gap:8px;min-width:0}
+legend{font-weight:700;font-size:.8rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:0;margin-bottom:4px}
+label{display:grid;gap:3px;font-size:.9rem}
+label.row{grid-template-columns:auto 1fr;align-items:center;gap:8px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0;width:100%}
+input[type=checkbox]{width:auto;padding:0;margin:0}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+textarea{font-family:var(--mono);font-size:.8rem;min-height:72px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.inline{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.help{color:var(--muted);font-size:.8rem}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:.75rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+th.n{text-align:right}
+.scroll{overflow-x:auto}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:.78rem;font-weight:700}
+.pill.m{background:var(--mother-soft);color:var(--mother)}
+.pill.f{background:var(--father-soft);color:var(--father)}
+.pill.x{background:var(--flag-soft);color:var(--flag)}
+.flags{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.flags li{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:baseline;font-size:.9rem}
+.flags .d{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.85rem;color:var(--muted);align-items:center}
+.sw{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:5px;border:1px solid var(--line)}
+.year{display:grid;gap:12px}
+.year h2{display:flex;gap:12px;flex-wrap:wrap;align-items:baseline}
+.year h2 small{font-weight:400;color:var(--muted);font-size:.85rem}
+.months{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.month{border:1px solid var(--line);border-radius:6px;padding:8px;background:var(--panel)}
+.month h3{margin:0 0 6px;font-size:.9rem}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-family:var(--mono);font-size:.72rem;font-variant-numeric:tabular-nums}
+.grid .wd{color:var(--muted);text-align:center;font-size:.62rem;padding-bottom:2px}
+.cell{aspect-ratio:1;display:grid;place-items:center;border-radius:3px;position:relative;color:var(--ink)}
+.cell.m{background:var(--mother-soft)}
+.cell.f{background:var(--father-soft)}
+.cell.ex{outline:2px solid currentColor;outline-offset:-2px}
+.cell.m.ex{color:var(--mother)} .cell.f.ex{color:var(--father)}
+.cell.h::after{content:"";position:absolute;right:2px;top:2px;width:5px;height:5px;border-radius:50%;background:var(--hol)}
+.cell.bad{box-shadow:inset 0 0 0 2px var(--flag)}
+.cell.lost{background:repeating-linear-gradient(135deg,var(--father-soft) 0 3px,var(--mother-soft) 3px 6px)}
+.cell.pad{background:transparent}
+button{font:inherit;font-weight:700;background:var(--ink);color:var(--bg);border:0;border-radius:6px;padding:8px 14px;cursor:pointer}
+.btns{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.exch{font-size:.85rem;columns:3;column-gap:24px;max-width:100%}
+.exch div{break-inside:avoid;font-family:var(--mono);font-variant-numeric:tabular-nums;padding:2px 0;white-space:nowrap}
+@media (max-width:700px){.exch{columns:1}}
+details summary{cursor:pointer;font-weight:700}
+@media print{
+  body{background:#fff;color:#000;padding:0;font-size:12px}
+  .noprint,.controls,header .sub{display:none}
+  .panel{border:0;padding:0;background:#fff}
+  .year{break-inside:avoid;page-break-inside:avoid;break-before:page}
+  .year:first-of-type{break-before:auto}
+  .months{grid-template-columns:repeat(4,1fr)}
+  .cell.m{background:#f3dde9 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cell.f{background:#d6ece7 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cell.lost{background:repeating-linear-gradient(135deg,#d6ece7 0 3px,#f3dde9 3px 6px) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+@media (prefers-reduced-motion:no-preference){.cell{transition:box-shadow .15s}}
+.site-note{max-width:70ch;margin:2rem auto 1rem;padding:0 16px;color:var(--muted);font-size:.9rem;text-align:center}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Long Distance Cycle Planner</h1>
+    <p class="sub">Enter the cycle, pick which rule resolves holidays, and read the exchange calendar. Striped days are days Father's regular block lost to one of Mother's holidays. Red-outlined days belong to a stretch that breaks the consecutive-days limit.</p>
+  </header>
+
+  <section class="panel">
+    <div class="controls">
+      <fieldset>
+        <legend>Cycle</legend>
+        <label>Moving parent's move date (optional) <input type="date" id="move"><span class="help">Sets the cycle start 5 days before the move, Father first. Clear it to set the start date by hand.</span></label>
+        <label>Cycle start date <input type="date" id="start" value="2027-01-01"></label>
+        <label>Who has the child first
+          <select id="first"><option value="M">Mother</option><option value="F">Father</option></select></label>
+        <div class="inline">
+          <label>Mother days <input type="number" id="mdays" class="num" value="21" min="1" max="60"></label>
+          <label>Father days <input type="number" id="fdays" class="num" value="11" min="1" max="60"></label>
+        </div>
+        <div class="inline">
+          <label>Years to show <input type="number" id="years" class="num" value="4" min="1" max="10"></label>
+          <label>Limit (consecutive days) <input type="number" id="limit" class="num" value="21" min="1" max="90"></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Rule for holidays inside the cycle</legend>
+        <label>Option
+          <select id="mode">
+            <option value="none">No fix (v38 as written): holiday overrides, cycle runs underneath</option>
+            <option value="A">A. Absorb: Mother's holidays count inside her block, Father's block fixed</option>
+            <option value="B">B. Make up from regular days: Father's next block starts earlier by the days a holiday took</option>
+            <option value="B1">B1. Make up right after the holiday: a short Father period follows the holiday</option>
+            <option value="C">C. Re-anchor: Father's block starts on day limit+1 of Mother's stretch</option>
+            <option value="E">E. Cap only: Father's adjacent block extends until Mother's stretch is the limit, no make-up</option>
+            <option value="EB">E + B: days a holiday takes from Father come back on the side that keeps Mother at the limit</option>
+            <option value="R3">F. Reset: after each of Mother's holidays, Father's block starts the next day</option>
+            <option value="RE">G. Reset + cap: F, and Father's block before her holiday runs later if her stretch would pass the limit</option>
+          </select></label>
+        <p class="help" id="modehelp"></p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Holidays</legend>
+        <label class="row"><input type="checkbox" id="h_md" checked> Mother's Day weekend (Fri to Mon)</label>
+        <label class="row"><input type="checkbox" id="h_fd" checked> Father's Day weekend (Fri to Mon)</label>
+        <label class="row"><input type="checkbox" id="h_tg" checked> Thanksgiving</label>
+        <div class="inline">
+          <label>Thanksgiving span <select id="tg_span"><option value="mon">Monday to Monday</option><option value="wed">Wednesday to Wednesday</option></select></label>
+          <label>Mother has Thanksgiving in <select id="tg_par"><option value="1">odd years</option><option value="0">even years</option></select></label>
+        </div>
+        <label class="row"><input type="checkbox" id="h_xm" checked> Christmas: Dec 18-23, 23-28, 28-Jan 2</label>
+        <label>Mother has the Christmas period (Dec 23-28) in <select id="xm_par"><option value="0">even years</option><option value="1">odd years</option></select></label>
+        <label class="row"><input type="checkbox" id="h_bd" checked> Child's birthday (two nights, starting the day before the birthday)</label>
+        <label>Child's birthday (month and day) <input type="text" id="bd_md" class="num" value="07-04" pattern="[0-9]{2}-[0-9]{2}" placeholder="MM-DD"></label>
+        <label>Father has the birthday in <select id="bd_par"><option value="0">even years</option><option value="1">odd years</option></select></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Custom periods</legend>
+        <label>One per line: start, end (exclusive), M or F, name
+          <textarea id="custom" placeholder="2027-07-01, 2027-07-08, F, Fourth of July week"></textarea></label>
+        <p class="help">Dates as YYYY-MM-DD. The end date is the exchange day, not included in the period.</p>
+        <div class="btns"><button id="run" type="button">Build calendar</button><span class="help">Changes rebuild automatically too.</span></div>
+      </fieldset>
+    </div>
+  </section>
+
+  <section class="panel noprint">
+    <h2>Save the calendar</h2>
+    <div class="btns">
+      <button id="dl" type="button">Save .ics (any calendar app)</button>
+      <button id="dlcsv" type="button">Save .csv (Google Calendar, Outlook)</button>
+      <button id="cp" type="button">Copy .ics text</button>
+      <button id="pr" type="button">Print</button>
+    </div>
+    <p class="help" id="savemsg" style="margin:8px 0 0">All-day events: one per parenting block, one per exchange day. In the claude.ai viewer the .ics is saved as a .txt file; rename it to parenting-schedule.ics before importing. The saved copy of this page in pCloud downloads the .ics directly.</p>
+    <div class="btns" hidden>
+    </div>
+    <details style="margin-top:10px"><summary>.ics text</summary>
+      <p class="help">If the download button does nothing in this viewer, copy this text into a file named schedule.ics and import that file. The saved copy of this page in pCloud downloads directly.</p>
+      <textarea id="icstext" readonly style="min-height:160px"></textarea>
+    </details>
+  </section>
+
+  <section class="panel">
+    <h2>Summary by year</h2>
+    <div class="scroll"><table id="summary"></table></div>
+  </section>
+
+  <section class="panel">
+    <h2>Stretches that break the limit</h2>
+    <ul class="flags" id="flags"></ul>
+  </section>
+
+  <section class="panel">
+    <h2>Days Father's regular block lost to Mother's holidays</h2>
+    <ul class="flags" id="lost"></ul>
+  </section>
+
+  <section class="panel">
+    <div class="legend">
+      <span><i class="sw" style="background:var(--mother-soft)"></i>Mother</span>
+      <span><i class="sw" style="background:var(--father-soft)"></i>Father</span>
+      <span><i class="sw" style="background:repeating-linear-gradient(135deg,var(--father-soft) 0 3px,var(--mother-soft) 3px 6px)"></i>Father's day lost to a holiday</span>
+      <span><i class="sw" style="box-shadow:inset 0 0 0 2px var(--flag)"></i>Over the limit</span>
+      <span><i class="sw" style="outline:2px solid var(--father);outline-offset:-2px"></i>Exchange day</span>
+      <span><i class="sw" style="position:relative"><i style="position:absolute;right:2px;top:2px;width:5px;height:5px;border-radius:50%;background:var(--hol)"></i></i>Holiday day</span>
+    </div>
+  </section>
+
+  <div id="cal"></div>
+
+  <section class="panel">
+    <details><summary>Exchange list (date and who picks up)</summary>
+      <p class="help">v38 Section VIII: Mother transports the regular schedule; for a holiday the parent whose time starts picks up.</p>
+      <div class="exch" id="exch"></div>
+    </details>
+  </section>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const DAY=86400000;
+const ymd=d=>d.toISOString().slice(0,10);
+const utc=(y,m,d)=>new Date(Date.UTC(y,m-1,d));
+const parse=s=>{const [y,m,d]=s.split('-').map(Number);return utc(y,m,d)};
+const add=(d,n)=>new Date(d.getTime()+n*DAY);
+const nthSunday=(y,m,n)=>{let d=utc(y,m,1);while(d.getUTCDay()!==0)d=add(d,1);return add(d,7*(n-1))};
+const thanksgiving=y=>{let d=utc(y,11,1);while(d.getUTCDay()!==4)d=add(d,1);return add(d,21)};
+const HELP={none:'Holidays take their days from whoever\'s block they land in. The cycle does not pause. Nothing stops a holiday from attaching to Mother\'s block.',
+ A:'Mother\'s holiday that lands in Father\'s block is not taken. Father\'s holiday that lands in Mother\'s block is taken. Exchange dates never move.',
+ B:'Holidays override as written. Each day a Mother holiday takes from Father\'s block is returned from the end of Mother\'s next regular block: Father\'s next block starts that many days earlier. Her holiday days are never taken. No extra exchange is added.',
+ B1:'Holidays override as written. Each day a Mother holiday takes from Father\'s block is added right after that holiday ends, as a short Father period, so Mother\'s next block is shorter by the same count. Adds an exchange after each affected holiday.',
+ C:'Father\'s block begins when Mother has had the limit number of consecutive days, or on schedule, whichever comes first. A Mother holiday inside his block pauses it and he resumes after. The cycle restarts after his block.',
+ E:'Holidays override as written. When Mother\'s stretch would pass the limit, Father\'s block next to it starts earlier (or, if the holiday sits at that end, his block before it runs later) by the excess days, so her stretch is exactly the limit. Nothing else moves.',
+ EB:'Holidays apply as written. Each day one of Mother\'s holidays takes from Father\'s block comes back from her regular time on the side that keeps her consecutive time at the limit: if the holiday runs out of her block into his, his block before it ends later; otherwise his next block starts earlier. Her holidays are never shortened; no extra exchange is added.',
+ R3:'Mother\'s holidays apply as written. When one ends, the cycle restarts: Father\'s block begins the next day, then Mother\'s block, and so on until her next holiday. Father\'s holidays override and the cycle keeps counting underneath. Her regular block can still run into her holiday.',
+ RE:'Option F, plus the cap: if Mother\'s regular block runs into one of her holidays and the total would pass the limit, Father\'s block before that holiday runs later by the excess days. Every exchange date depends on the holidays before it; use this page or the OFW calendar to publish them.'};
+
+function holidays(y,o){
+  const H=[];
+  if(o.md){const s=nthSunday(y,5,2);H.push({name:"Mother's Day weekend",s:add(s,-2),e:add(s,1),p:'M'})}
+  if(o.fd){const s=nthSunday(y,6,3);H.push({name:"Father's Day weekend",s:add(s,-2),e:add(s,1),p:'F'})}
+  if(o.tg){const t=thanksgiving(y);const s=add(t,o.tgSpan==='mon'?-3:-1);H.push({name:'Thanksgiving',s,e:add(s,7),p:(y%2===o.tgPar)?'M':'F'})}
+  if(o.xm){const m=(y%2===o.xmPar)?'M':'F',f=m==='M'?'F':'M';
+    H.push({name:'Pre-Christmas',s:utc(y,12,18),e:utc(y,12,23),p:f});
+    H.push({name:'Christmas',s:utc(y,12,23),e:utc(y,12,28),p:m});
+    H.push({name:'New Year',s:utc(y,12,28),e:utc(y+1,1,2),p:f})}
+  if(o.bd){const bm=/^(\d{1,2})-(\d{1,2})$/.exec(o.bdMd||'');if(bm){const b=utc(y,+bm[1],+bm[2]);H.push({name:"Child's birthday",s:add(b,-1),e:add(b,1),p:(y%2===o.bdPar)?'F':'M'})}}
+  return H;
+}
+
+function build(){
+  if(/^\d{4}-\d{2}-\d{2}$/.test($('move').value)){$('start').value=ymd(add(parse($('move').value),-5));$('first').value='F'}
+  const o={start:parse($('start').value||'2027-01-01'),first:$('first').value,
+    m:+$('mdays').value||21,f:+$('fdays').value||11,years:Math.min(10,Math.max(1,+$('years').value||4)),
+    limit:+$('limit').value||21,mode:$('mode').value,
+    md:$('h_md').checked,fd:$('h_fd').checked,tg:$('h_tg').checked,tgSpan:$('tg_span').value,tgPar:+$('tg_par').value,
+    xm:$('h_xm').checked,xmPar:+$('xm_par').value,bd:$('h_bd').checked,bdPar:+$('bd_par').value,bdMd:$('bd_md').value.trim()};
+  $('modehelp').textContent=HELP[o.mode];
+  const y0=o.start.getUTCFullYear(), end=utc(y0+o.years,1,1);
+  const cycle=o.m+o.f;
+  let H=[];for(let y=y0;y<y0+o.years;y++)H=H.concat(holidays(y,o));
+  for(const line of $('custom').value.split('\n')){const t=line.split(',').map(s=>s.trim());if(t.length<3)continue;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(t[0])||!/^\d{4}-\d{2}-\d{2}$/.test(t[1]))continue;
+    const p=t[2].toUpperCase();if(p!=='M'&&p!=='F')continue;H.push({name:t[3]||'Custom',s:parse(t[0]),e:parse(t[1]),p});}
+  const hol={};for(const h of H){for(let d=h.s;d<h.e;d=add(d,1))hol[ymd(d)]={p:h.p,name:h.name,start:ymd(h.s)}}
+  // regular assignment
+  const reg={},keys=[];
+  for(let d=o.start,i=0;d<end;d=add(d,1),i++){const k=i%cycle;reg[ymd(d)]=(o.first==='M')?(k<o.m?'M':'F'):(k<o.f?'F':'M');keys.push(ymd(d))}
+  const days={};
+  const capFn=()=>{let i=0;while(i<keys.length){if(days[keys[i]]==='M'){const s=i;while(i<keys.length&&days[keys[i]]==='M')i++;
+      let ex=i-s-o.limit;if(ex>0){let j=i-1;while(ex>0&&j>=s&&!hol[keys[j]]){days[keys[j]]='F';ex--;j--}
+        j=s;while(ex>0&&j<i&&!hol[keys[j]]){days[keys[j]]='F';ex--;j++}
+        j=i-1;while(ex>0&&j>=s){if(!hol[keys[j]]&&days[keys[j]]==='M'){days[keys[j]]='F';ex--}j--}}}else i++}};
+  if(o.mode==='none'){for(const k of keys)days[k]=hol[k]?hol[k].p:reg[k]}
+  else if(o.mode==='A'){for(const k of keys)days[k]=(hol[k]&&hol[k].p==='F')?'F':reg[k]}
+  else if(o.mode==='EB'){for(const k of keys)days[k]=hol[k]?hol[k].p:reg[k];
+    let i=0;while(i<keys.length){if(reg[keys[i]]==='F'){const s=i;while(i<keys.length&&reg[keys[i]]==='F')i++;
+      const per={};for(let j=s;j<i;j++){const k=keys[j];if(hol[k]&&hol[k].p==='M'){(per[hol[k].start]=per[hol[k].start]||[]).push(j)}}
+      for(const hs in per){let L=per[hs].length;
+        if(hs<=keys[s]){let pb=s-1;while(pb>0&&reg[keys[pb-1]]==='M')pb--;let j=pb;while(L>0&&j<s){if(days[keys[j]]==='M'&&!hol[keys[j]]){days[keys[j]]='F';L--}j++}}
+        else{let n=i;while(n<keys.length&&reg[keys[n]]!=='F')n++;let j=n-1;while(L>0&&j>=i){if(days[keys[j]]==='M'&&!hol[keys[j]]){days[keys[j]]='F';L--}j--}}}}
+      else i++}}
+  else if(o.mode==='B'||o.mode==='B1'||o.mode==='E'){for(const k of keys)days[k]=hol[k]?hol[k].p:reg[k];
+    if(o.mode==='B1'){let i=0;while(i<keys.length){if(reg[keys[i]]==='F'){const s=i;while(i<keys.length&&reg[keys[i]]==='F')i++;
+      let lost=0;for(let j=s;j<i;j++)if(days[keys[j]]==='M')lost++;
+      let j=i;while(lost>0&&j<keys.length){if(days[keys[j]]==='M'&&!hol[keys[j]]){days[keys[j]]='F';lost--}j++}}else i++}}
+    if(o.mode==='B'||o.mode==='EB'){let i=0;while(i<keys.length){if(reg[keys[i]]==='F'){const s=i;while(i<keys.length&&reg[keys[i]]==='F')i++;
+      let lost=0;for(let j=s;j<i;j++)if(days[keys[j]]==='M')lost++;
+      if(lost){let n=i;while(n<keys.length&&reg[keys[n]]!=='F')n++;let j=n-1;while(lost>0&&j>=i){if(days[keys[j]]==='M'&&!hol[keys[j]]){days[keys[j]]='F';lost--}j--}}}else i++}}
+    if(o.mode==='E'||o.mode==='EB')capFn()}
+  else if(o.mode==='R3'||o.mode==='RE'){let order=o.first==='M'?[['M',o.m],['F',o.f]]:[['F',o.f],['M',o.m]],idx=0,pos=0,i=0;
+    const tick=()=>{pos++;if(pos>=order[idx][1]){idx=(idx+1)%2;pos=0}};
+    while(i<keys.length){const k=keys[i];
+      if(hol[k]){const p=hol[k].p,nm=hol[k].name;let j=i;while(j<keys.length&&hol[keys[j]]&&hol[keys[j]].p===p&&hol[keys[j]].name===nm){days[keys[j]]=p;if(p==='F')tick();j++}
+        i=j;if(p==='M'){order=[['F',o.f],['M',o.m]];idx=0;pos=0}continue}
+      days[k]=order[idx][0];tick();i++}
+    if(o.mode==='RE')capFn()}
+  else if(o.mode==='C'){let mrun=0,anchorIdx=o.first==='M'?o.m:0,i=0;
+    while(i<keys.length){if(mrun>=o.limit||i===anchorIdx){let got=0;while(got<o.f&&i<keys.length){const k=keys[i];
+        if(hol[k]&&hol[k].p==='M')days[k]='M';else{days[k]='F';got++}i++}anchorIdx=i+o.m;mrun=0;continue}
+      const k=keys[i];days[k]=hol[k]?hol[k].p:'M';mrun=days[k]==='M'?mrun+1:0;i++}}
+  // stretches
+  const stretches=[];{let i=0;while(i<keys.length){const p=days[keys[i]],s=i;while(i<keys.length&&days[keys[i]]===p)i++;
+    const ks=keys.slice(s,i);const holNames=[...new Set(ks.filter(k=>hol[k]&&hol[k].p===p).map(k=>hol[k].name))];
+    const block=p==='M'?o.m:o.f;const bad=ks.length>=o.limit&&(ks.length>block||holNames.length>0);
+    stretches.push({p,s:ks[0],e:ks[ks.length-1],n:ks.length,holNames,bad})}}
+  const badSet=new Set();for(const st of stretches)if(st.bad){for(let d=parse(st.s);d<=parse(st.e);d=add(d,1))badSet.add(ymd(d))}
+  // lost days: regular F, final M, caused by M holiday
+  const lost=[];for(const k of keys)if(reg[k]==='F'&&days[k]==='M'&&hol[k]&&hol[k].p==='M')lost.push(k);
+  // exchanges
+  const ex=[];for(let i=1;i<keys.length;i++){if(days[keys[i]]!==days[keys[i-1]]){const k=keys[i],to=days[k];
+    const isHol=!!(hol[k]&&hol[k].p===to)||!!(hol[keys[i-1]]&&hol[keys[i-1]].p===days[keys[i-1]]&&!hol[k]);
+    ex.push({k,to,who:isHol?(to==='M'?'Mother picks up':'Father picks up'):'Mother transports'})}}
+  // summary
+  const yrs={};for(const k of keys){const y=k.slice(0,4);yrs[y]=yrs[y]||{M:0,F:0,ML:0,FL:0,bad:0,lost:0};yrs[y][days[k]]++}
+  for(const st of stretches){const y=st.s.slice(0,4);yrs[y][st.p+'L']=Math.max(yrs[y][st.p+'L'],st.n);if(st.bad)yrs[y].bad++}
+  for(const k of lost)yrs[k.slice(0,4)].lost++;
+  let t='<thead><tr><th>Year</th><th class="n">Father days</th><th class="n">Mother days</th><th class="n">Father longest</th><th class="n">Mother longest</th><th class="n">Over limit</th><th class="n">Father days lost</th><th class="n">Exchanges</th></tr></thead><tbody>';
+  for(const y of Object.keys(yrs)){const r=yrs[y];const nx=ex.filter(e=>e.k.startsWith(y)).length;
+    t+=`<tr><td class="num">${y}</td><td class="n">${r.F}</td><td class="n">${r.M}</td><td class="n">${r.FL}</td><td class="n">${r.ML}</td><td class="n">${r.bad?'<span class="pill x">'+r.bad+'</span>':'0'}</td><td class="n">${r.lost}</td><td class="n">${nx}</td></tr>`}
+  $('summary').innerHTML=t+'</tbody>';
+  const bads=stretches.filter(s=>s.bad);
+  $('flags').innerHTML=bads.length?bads.map(s=>`<li><span class="d">${s.s} to ${s.e}</span><span><span class="pill ${s.p.toLowerCase()}">${s.p==='M'?'Mother':'Father'}</span> ${s.n} days${s.holNames.length?' (regular block + '+s.holNames.join(', ')+')':''}</span></li>`).join(''):'<li><span class="d">none</span><span>No stretch reaches the limit in these years.</span></li>';
+  // group lost by holiday
+  const groups=[];for(const k of lost){const g=groups[groups.length-1];if(g&&g.name===hol[k].name&&add(parse(g.e),1).getTime()===parse(k).getTime())g.e=k;else groups.push({name:hol[k].name,s:k,e:k})}
+  $('lost').innerHTML=groups.length?groups.map(g=>{const n=(parse(g.e)-parse(g.s))/DAY+1;return `<li><span class="d">${g.s}${n>1?' to '+g.e:''}</span><span>${n} day${n>1?'s':''} taken by ${g.name}</span></li>`}).join(''):'<li><span class="d">none</span><span>Father\'s regular block is never reduced under this option.</span></li>';
+  $('exch').innerHTML=ex.map(e=>`<div>${e.k} <span class="pill ${e.to.toLowerCase()}">${e.to==='M'?'to Mother':'to Father'}</span> ${e.who}</div>`).join('');
+  // calendars
+  const exSet=new Set(ex.map(e=>e.k));
+  const MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  let c='';
+  for(let y=y0;y<y0+o.years;y++){const r=yrs[y]||{F:0,M:0,bad:0};
+    c+=`<section class="year panel"><h2>${y} <small>Father ${r.F} days, Mother ${r.M} days, ${r.bad} stretch${r.bad===1?'':'es'} over the limit</small></h2><div class="months">`;
+    for(let m=1;m<=12;m++){const first=utc(y,m,1);let g=`<div class="month"><h3>${MN[m-1]}</h3><div class="grid">`;
+      for(const w of ['Su','Mo','Tu','We','Th','Fr','Sa'])g+=`<div class="wd">${w}</div>`;
+      for(let i=0;i<first.getUTCDay();i++)g+='<div class="cell pad"></div>';
+      for(let d=first;d.getUTCMonth()===m-1;d=add(d,1)){const k=ymd(d),p=days[k];
+        if(!p){g+=`<div class="cell pad">${d.getUTCDate()}</div>`;continue}
+        const cls=['cell',p.toLowerCase()];if(hol[k])cls.push('h');if(exSet.has(k))cls.push('ex');if(badSet.has(k))cls.push('bad');if(reg[k]==='F'&&p==='M'&&hol[k])cls.push('lost');
+        const title=`${k}: ${p==='M'?'Mother':'Father'}${hol[k]?' ('+hol[k].name+', '+(hol[k].p==='M'?'Mother':'Father')+'\'s holiday)':''}${exSet.has(k)?' - exchange':''}`;
+        g+=`<div class="${cls.join(' ')}" title="${title}">${d.getUTCDate()}</div>`}
+      c+=g+'</div></div>'}
+    c+='</div></section>'}
+  $('cal').innerHTML=c;
+  last={keys,days,hol,ex};$('icstext').value=ics();
+  try{localStorage.setItem('ldcp',JSON.stringify({move:$('move').value,start:$('start').value,first:o.first,m:o.m,f:o.f,years:o.years,limit:o.limit,mode:o.mode,custom:$('custom').value,
+    md:o.md,fd:o.fd,tg:o.tg,tgSpan:o.tgSpan,tgPar:o.tgPar,xm:o.xm,xmPar:o.xmPar,bd:o.bd,bdPar:o.bdPar,bdMd:o.bdMd}))}catch(e){}
+}
+try{const s=JSON.parse(localStorage.getItem('ldcp')||'null');if(s){$('move').value=s.move||'';$('start').value=s.start;$('first').value=s.first;$('mdays').value=s.m;$('fdays').value=s.f;$('years').value=s.years;$('limit').value=s.limit;$('mode').value=s.mode;$('custom').value=s.custom||'';
+  $('h_md').checked=s.md;$('h_fd').checked=s.fd;$('h_tg').checked=s.tg;$('tg_span').value=s.tgSpan;$('tg_par').value=s.tgPar;$('h_xm').checked=s.xm;$('xm_par').value=s.xmPar;$('h_bd').checked=s.bd;$('bd_par').value=s.bdPar;if(s.bdMd)$('bd_md').value=s.bdMd}}catch(e){}
+let last=null;
+function ics(){if(!last)return '';const {keys,days,hol,ex}=last;const d8=s=>s.replace(/-/g,'');
+  const stamp=new Date().toISOString().replace(/[-:]/g,'').slice(0,15)+'Z';
+  const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Long Distance Cycle Planner//EN','CALSCALE:GREGORIAN','X-WR-CALNAME:Parenting schedule'];
+  let i=0;while(i<keys.length){const p=days[keys[i]],s=i;while(i<keys.length&&days[keys[i]]===p)i++;
+    const hn=[...new Set(keys.slice(s,i).filter(k=>hol[k]&&hol[k].p===p).map(k=>hol[k].name))];
+    const endK=i<keys.length?keys[i]:ymd(add(parse(keys[i-1]),1));
+    L.push('BEGIN:VEVENT',`UID:blk-${keys[s]}@cycleplanner`,`DTSTAMP:${stamp}`,`DTSTART;VALUE=DATE:${d8(keys[s])}`,`DTEND;VALUE=DATE:${d8(endK)}`,`SUMMARY:With ${p==='M'?'Mother':'Father'} (${i-s} days)`);
+    if(hn.length)L.push(`DESCRIPTION:Includes ${hn.join(', ')}`);L.push('END:VEVENT')}
+  for(const e of ex){L.push('BEGIN:VEVENT',`UID:ex-${e.k}@cycleplanner`,`DTSTAMP:${stamp}`,`DTSTART;VALUE=DATE:${d8(e.k)}`,`DTEND;VALUE=DATE:${d8(ymd(add(parse(e.k),1)))}`,`SUMMARY:Exchange to ${e.to==='M'?'Mother':'Father'} (${e.who})`,'END:VEVENT')}
+  L.push('END:VCALENDAR');return L.join('\r\n')+'\r\n'}
+function csv(){if(!last)return '';const {keys,days,hol,ex}=last;const q=s=>'"'+String(s).replace(/"/g,'""')+'"';
+  const rows=[['Subject','Start Date','End Date','All Day Event','Description']];
+  let i=0;while(i<keys.length){const p=days[keys[i]],s=i;while(i<keys.length&&days[keys[i]]===p)i++;
+    const hn=[...new Set(keys.slice(s,i).filter(k=>hol[k]&&hol[k].p===p).map(k=>hol[k].name))];
+    rows.push([`With ${p==='M'?'Mother':'Father'} (${i-s} days)`,keys[s],keys[i-1],'True',hn.length?'Includes '+hn.join(', '):''])}
+  for(const e of ex)rows.push([`Exchange to ${e.to==='M'?'Mother':'Father'} (${e.who})`,e.k,e.k,'True','']);
+  return rows.map(r=>r.map(q).join(',')).join('\r\n')+'\r\n'}
+const msg=t=>{$('savemsg').textContent=t};
+async function saveFile(viewerName,localName,text){
+  if(window.claude&&typeof window.claude.use==='function'){
+    const dl=await claude.use('downloads');
+    if(!dl){msg('Saving files is not available in this view. Copy the .ics text below, or use the saved copy of this page.');return}
+    try{await dl.save({filename:viewerName,data:text});msg('Saved '+viewerName+'. '+(viewerName.endsWith('.txt')?'Rename it to parenting-schedule.ics, then import it.':'Import it into your calendar.'))}
+    catch(e){const c=e&&e.code;msg(c==='declined'?'Save cancelled.':c==='rate_limited'?'A save prompt is already open. Answer it, then try again.':'Save not available here ('+(c||'unavailable')+'). Copy the .ics text below instead.')}
+    return}
+  try{const b=new Blob([text],{type:localName.endsWith('.csv')?'text/csv':'text/calendar'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=localName;document.body.appendChild(a);a.click();a.remove();msg('Download started: '+localName)}
+  catch(e){msg('Download blocked here. Copy the .ics text below into a file named parenting-schedule.ics.')}}
+$('dl').addEventListener('click',()=>saveFile('parenting-schedule.ics.txt','parenting-schedule.ics',ics()));
+$('dlcsv').addEventListener('click',()=>saveFile('parenting-schedule.csv','parenting-schedule.csv',csv()));
+$('cp').addEventListener('click',()=>{const t=ics();const done=()=>$('savemsg').textContent='Copied. Paste into a new file named schedule.ics and import it into your calendar.';
+  const fail=()=>{$('icstext').closest('details').open=true;$('icstext').select();$('savemsg').textContent='Clipboard blocked. The text is selected below; press Ctrl+C.'};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(done,fail);else fail()});
+$('pr').addEventListener('click',()=>{try{window.print()}catch(e){$('savemsg').textContent='Printing is blocked in this viewer. Open the saved copy of this page and print from there.'}});
+document.querySelectorAll('input,select,textarea').forEach(el=>{if(el.id!=='icstext')el.addEventListener('change',build)});
+$('run').addEventListener('click',build);
+build();
+})();
+</script>
+<footer class="site-note">Runs entirely in your browser. Nothing you enter is sent anywhere. A planning aid, not legal advice; the parenting plan controls.</footer>
+</body>
+</html>
