@@ -107,44 +107,13 @@ ul.flags li{margin:.15rem 0}
 </header>
 
 <section class="panel controls">
-  <h2>Schedule <small>times are whole hours, local to wherever the exchange happens</small></h2>
+  <h2>Schedule <small>times are whole hours, local to wherever the exchange happens; press Build the calendar after any change</small></h2>
   <div class="grid">
     <fieldset>
-      <legend>Regular cycle</legend>
+      <legend>Calendar</legend>
       <div class="fields wide">
-        <label class="f span2"><span class="l">Cycle type</span>
-          <select id="preset">
-            <option value="ld">Long distance blocks: 21 days with Mother, 11 with Father</option>
-            <option value="7-7">Alternating weeks: 7 and 7</option>
-            <option value="2-2-3">2-2-3 (two-week cycle)</option>
-            <option value="2-2-5-5">2-2-5-5 (two-week cycle)</option>
-            <option value="3-4-4-3">3-4-4-3 (two-week cycle)</option>
-            <option value="5-2">Every weekend: 5 and 2</option>
-            <option value="custom">Custom block pattern</option>
-            <option value="weekly">Two-week same city schedule (Week A / Week B)</option>
-          </select></label>
-        <label class="f"><span class="l">Block pattern: Mother days, Father days, ...</span><input type="text" id="pattern" class="md" value="21,11" style="width:9rem"></label>
-        <label class="f"><span class="l">Cycle starts with</span><select id="first"><option value="M">Mother</option><option value="F">Father</option></select></label>
-        <label class="f"><span class="l">Exchange time</span><input type="time" id="xtime" value="12:00" step="3600"></label>
-        <label class="f"><span class="l">Cycle start date</span><input type="date" id="start" value="2027-01-01"></label>
+        <label class="f"><span class="l">Calendar start date</span><input type="date" id="start" value="2027-01-01"></label>
         <label class="f"><span class="l">Years to show</span><input type="number" id="years" value="2" min="1" max="10"></label>
-      </div>
-      <p class="help">The pattern lists days in turn: Mother, Father, Mother, Father. 21,11 means 21 days with Mother then 11 with Father; 2,2,3,2,2,3 is the two-week 2-2-3. "Cycle starts with" picks whose block opens the cycle on the start date at the exchange time.</p>
-    </fieldset>
-
-    <fieldset>
-      <legend>Move date and the switch between schedules</legend>
-      <div class="fields wide">
-        <label class="f"><span class="l">Moving parent's move date (optional)</span><input type="date" id="move"></label>
-        <label class="f"><span class="l">Blocks begin this many days before</span><input type="number" id="movepre" value="5" min="0" max="60"></label>
-        <label class="f span2 check" style="align-self:end"><input type="checkbox" id="premove" checked> Until then, use the two-week same city schedule</label>
-      </div>
-      <p class="help">With a move date, the block cycle starts at the exchange time this many days before the move, with the first block as chosen above. Before that, the two-week schedule below applies from the cycle start date.</p>
-    </fieldset>
-
-    <fieldset>
-      <legend>Day limit</legend>
-      <div class="fields wide">
         <label class="f"><span class="l">Longest stretch with one parent (days)</span><input type="number" id="limit" value="21" min="1" max="90"></label>
         <label class="f span2"><span class="l">When a holiday pushes a stretch over the limit</span>
           <select id="mode">
@@ -152,19 +121,50 @@ ul.flags li{margin:.15rem 0}
             <option value="none">Do nothing, only flag it</option>
           </select></label>
       </div>
-      <p class="help">The excess comes from the regular time next to the holiday: from the end of the stretch where it meets the other parent's next block; if the stretch ends with a holiday, from its start; if both ends are holidays, from the end of the regular time inside it. The cycle keeps its original dates.</p>
+      <p class="help">The calendar begins on the start date. The schedule in force on that date is the same city schedule if it is switched on and the long distance schedule begins later; otherwise the long distance schedule. The excess under the limit rule comes from the regular time next to the holiday: from the end of the stretch where it meets the other parent's next block; if the stretch ends with a holiday, from its start; if both ends are holidays, from the end of the regular time inside it. The cycle keeps its original dates.</p>
+    </fieldset>
+
+    <fieldset id="ldBox">
+      <legend>Long distance schedule (blocks)</legend>
+      <div class="fields wide">
+        <label class="f span2"><span class="l">Block pattern</span>
+          <select id="preset">
+            <option value="ld">21 days with Mother, 11 with Father</option>
+            <option value="7-7">Alternating weeks: 7 and 7</option>
+            <option value="2-2-3">2-2-3 (two-week cycle)</option>
+            <option value="2-2-5-5">2-2-5-5 (two-week cycle)</option>
+            <option value="3-4-4-3">3-4-4-3 (two-week cycle)</option>
+            <option value="5-2">Every weekend: 5 and 2</option>
+            <option value="custom">Custom pattern</option>
+          </select></label>
+        <label class="f"><span class="l">Days: Mother, Father, Mother, ...</span><input type="text" id="pattern" class="md" value="21,11" style="width:9rem"></label>
+        <label class="f"><span class="l">Cycle starts with</span><select id="first"><option value="M">Mother</option><option value="F">Father</option></select></label>
+        <label class="f"><span class="l">Exchange time</span><input type="time" id="xtime" value="12:00" step="3600"></label>
+        <label class="f"><span class="l">Begins</span>
+          <select id="begins">
+            <option value="move">Before the move date</option>
+            <option value="date">On a date</option>
+            <option value="start">At the calendar start</option>
+            <option value="never">Not used (same city schedule only)</option>
+          </select></label>
+        <label class="f" id="moveField"><span class="l">Moving parent's move date</span><input type="date" id="move"></label>
+        <label class="f" id="movepreField"><span class="l">Days before the move</span><input type="number" id="movepre" value="5" min="0" max="60"></label>
+        <label class="f" id="ldDateField"><span class="l">Long distance start date</span><input type="date" id="lddate"></label>
+      </div>
+      <p class="help">The first block starts at the exchange time on the day the schedule begins, with the parent chosen in "Cycle starts with". The pattern lists days in turn: Mother, Father, Mother, Father. 21,11 means 21 days with Mother then 11 with Father.</p>
+    </fieldset>
+
+    <fieldset id="weeklyBox">
+      <legend>Same city schedule (two-week)</legend>
+      <label class="check" style="margin-bottom:.6rem"><input type="checkbox" id="weeklyon" checked> Use this schedule from the calendar start until the long distance schedule begins</label>
+      <p class="help" style="margin:0 0 .6rem">Week 1 starts on the Monday on or before the calendar start date. Each row gives one parent a period inside the two weeks; the other parent has all the time not listed.</p>
+      <div class="tablebox"><table id="weekly">
+        <thead><tr><th>Week</th><th>Parent</th><th>From</th><th></th><th>To</th><th></th><th></th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <div class="actions"><button type="button" class="small" id="addrow">Add a period</button></div>
     </fieldset>
   </div>
-
-  <fieldset style="margin-top:1rem" id="weeklyBox">
-    <legend>Two-week same city schedule</legend>
-    <p class="help" style="margin:0 0 .6rem">Week 1 starts on the Monday on or before the cycle start date. Each row gives one parent a period inside the two weeks; the other parent has all the time not listed.</p>
-    <div class="tablebox"><table id="weekly">
-      <thead><tr><th>Week</th><th>Parent</th><th>From</th><th></th><th>To</th><th></th><th></th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-    <div class="actions"><button type="button" class="small" id="addrow">Add a period</button></div>
-  </fieldset>
 
   <fieldset style="margin-top:1rem">
     <legend>Holidays <span class="status" id="holcount"></span></legend>
@@ -308,8 +308,8 @@ function periodsFor(entry,cfg,y,day){
   return list;
 }
 
-/* config = {start:'YYYY-MM-DD', years, type:'blocks'|'weekly', pattern:[21,11], first:'M', xtime:'12:00', weekly:[rows], weeksPerCycle:2,
-             move:'YYYY-MM-DD'|null, movePre:5, preMoveWeekly:true, limit:21, mode:'cap'|'none',
+/* config = {start:'YYYY-MM-DD', years, pattern:[21,11], first:'M', xtime:'12:00', weekly:[rows], weeksPerCycle:2,
+             begins:'move'|'date'|'start'|'never', move:'YYYY-MM-DD'|null, movePre:5, ldDate:'YYYY-MM-DD'|null, weeklyOn:true, limit:21, mode:'cap'|'none',
              holidays:{id:{on,who,before,after,start,end,dates}}, birthdays:{id:{on,md,who,before,after,start,end}}} */
 function computeSchedule(c){
   const start=parseDate(c.start); if(start===null)throw new Error('Start date is missing');
@@ -319,15 +319,17 @@ function computeSchedule(c){
   const src=new Int16Array(N); // 0 regular, >0 period index+1, -1 moved by the limit rule
   const P={M:1,F:2}, R={1:'M',2:'F'};
   const xh=parseHours(c.xtime);
-  // phase boundary
-  let ldStart=null;
-  const move=parseDate(c.move);
-  if(move!==null&&c.type==='blocks'&&c.preMoveWeekly){ ldStart=addD(move,-(+c.movePre||0))+xh*HOUR; }
+  // when the block (long distance) schedule begins
+  let begins=c.begins||'start', ldStart=null, noMove=false;
+  if(begins==='move'){ const m=parseDate(c.move); if(m===null){ begins='never'; noMove=true; } else ldStart=addD(m,-(+c.movePre||0))+xh*HOUR; }
+  else if(begins==='date'){ const d=parseDate(c.ldDate); if(d===null)throw new Error('Enter the long distance start date, or choose another "Begins" option.'); ldStart=d+xh*HOUR; }
+  else if(begins==='start'){ ldStart=t0+xh*HOUR; }
+  const weeklyPhase = begins==='never' || (c.weeklyOn!==false && begins!=='start' && ldStart!==null);
   const blocksAnchor = ldStart!==null?ldStart:(t0+xh*HOUR);
-  const pattern=(c.pattern||[]).map(Number).filter(n=>n>0); if(c.type==='blocks'&&!pattern.length)throw new Error('Block pattern needs at least one number');
-  const cycleLen=pattern.reduce((a,b)=>a+b,0);
+  const pattern=(c.pattern||[]).map(Number).filter(n=>n>0); if(begins!=='never'&&!pattern.length)throw new Error('Block pattern needs at least one number');
+  const cycleLen=pattern.reduce((a,b)=>a+b,0)||1;
   // pattern entries alternate Mother, Father, Mother, Father...; "first" rotates the cycle so it opens with that parent's first block
-  let order=pattern.map((n,k)=>({p:k%2===0?1:2,n}));
+  let order=pattern.length?pattern.map((n,k)=>({p:k%2===0?1:2,n})):[{p:1,n:1}];
   if(c.first==='F'){ const k=order.findIndex(o=>o.p===2); if(k>0)order=order.slice(k).concat(order.slice(0,k)); }
   const blockParent=(t)=>{ // which parent has hour t under the block cycle
     let off=Math.floor((t-blocksAnchor)/DAYMS); off=((off%cycleLen)+cycleLen)%cycleLen;
@@ -346,7 +348,7 @@ function computeSchedule(c){
     }
     return rows.length&&rows[0].parent==='F'?1:(rows.length?2:1);
   };
-  const inWeekly=(t)=> c.type==='weekly' || (ldStart!==null && t<ldStart);
+  const inWeekly=(t)=> begins==='never' || (weeklyPhase && t<ldStart);
   for(let i=0;i<N;i++){ const t=t0+i*HOUR; par[i]= inWeekly(t)?weeklyParent(t):blockParent(t); }
   // periods
   const periods=[];
@@ -367,7 +369,7 @@ function computeSchedule(c){
     while(i<N){
       const p=par[i]; const s=i; while(i<N&&par[i]===p)i++;
       const e=i; // run [s,e) with parent p
-      if(ldStart!==null && t0+s*HOUR<ldStart)continue; // same city phase is not under the rule
+      if(weeklyPhase && (begins==='never' || t0+s*HOUR<ldStart))continue; // same city phase is not under the rule
       let ex=e-s-limitH; if(ex<=0)continue;
       ex=Math.ceil(ex/24)*24; const other=3-p;
       const isHol=k=>src[k]>0;
@@ -406,7 +408,7 @@ function computeSchedule(c){
     const ex=exchanges.some(x=>x.t>=t&&x.t<t+DAYMS);
     days[ymd(t)]={first,second,firstH,m,f,hol,cap,bad,ex};
   }
-  return {t0,t1,y0,years,segs,exchanges,summary,over,days,periods,limitH,movedH,ldStart};
+  return {t0,t1,y0,years,segs,exchanges,summary,over,days,periods,limitH,movedH,ldStart:(weeklyPhase&&begins!=='never')?ldStart:null,weeklyPhase,begins,noMove};
 }
 if(typeof module!=='undefined'){module.exports={computeSchedule,CAT,BDS,PLANSET,WEEKLY_PLAN,parsePeriods,easter,nth,last,monBefore,ymd,hm};}
 </script>
@@ -449,24 +451,26 @@ function weeklyRow(r){
 function setWeekly(rows){ const tb=$('weekly').querySelector('tbody'); tb.innerHTML=''; rows.forEach(r=>tb.appendChild(weeklyRow(r))); }
 function readWeekly(){ return [...$('weekly').querySelectorAll('tbody tr')].map(tr=>({week:+tr.querySelector('.wk').value,parent:tr.querySelector('.par').value,sd:+tr.querySelector('.sd').value,st:tr.querySelector('.st').value||'00:00',ed:+tr.querySelector('.ed').value,et:tr.querySelector('.et').value||'00:00'})); }
 
-const PRESETS={'ld':{pattern:'21,11',first:'M',xtime:'12:00'},'7-7':{pattern:'7,7',first:'M',xtime:'17:00'},'2-2-3':{pattern:'2,2,3,2,2,3',first:'M',xtime:'17:00'},'2-2-5-5':{pattern:'2,2,5,5',first:'M',xtime:'17:00'},'3-4-4-3':{pattern:'3,4,4,3',first:'M',xtime:'17:00'},'5-2':{pattern:'5,2',first:'M',xtime:'17:00'}};
-function applyPreset(){
+const PRESETS={'ld':{pattern:'21,11',first:'F',xtime:'12:00'},'7-7':{pattern:'7,7',first:'M',xtime:'17:00'},'2-2-3':{pattern:'2,2,3,2,2,3',first:'M',xtime:'17:00'},'2-2-5-5':{pattern:'2,2,5,5',first:'M',xtime:'17:00'},'3-4-4-3':{pattern:'3,4,4,3',first:'M',xtime:'17:00'},'5-2':{pattern:'5,2',first:'M',xtime:'17:00'}};
+function applyPreset(ev){
   const v=$('preset').value; const p=PRESETS[v];
-  if(p){$('pattern').value=p.pattern;$('first').value=p.first;$('xtime').value=p.xtime;}
-  const weekly=v==='weekly';
-  $('pattern').disabled=weekly; $('first').disabled=weekly; $('xtime').disabled=weekly;
-  $('weeklyBox').style.display=(weekly||($('move').value&&$('premove').checked))?'':'none';
+  if(p&&ev&&ev.target===$('preset')){$('pattern').value=p.pattern;$('first').value=p.first;$('xtime').value=p.xtime;}
+  const b=$('begins').value;
+  $('moveField').style.display=b==='move'?'':'none'; $('movepreField').style.display=b==='move'?'':'none'; $('ldDateField').style.display=b==='date'?'':'none';
+  ['pattern','first','xtime'].forEach(id=>$(id).disabled=(b==='never'));
+  const weeklyUsed=b==='never'||(b!=='start'&&$('weeklyon').checked);
+  $('weekly').style.opacity=weeklyUsed?'1':'.45'; $('addrow').disabled=!weeklyUsed; $('weeklyon').disabled=(b==='never'||b==='start');
 }
 function readConfig(){
   const holidays={}; for(const h of CAT){ holidays[h.id]={on:$('h_'+h.id+'_on').checked,who:$('h_'+h.id+'_who').value,before:+$('h_'+h.id+'_before').value||0,after:+$('h_'+h.id+'_after').value||0,start:$('h_'+h.id+'_start').value||'00:00',end:endVal('h_'+h.id+'_end'),dates:$('h_'+h.id+'_dates').value}; }
   const birthdays={}; for(const b of BDS){ birthdays[b.id]={on:$('b_'+b.id+'_on').checked,md:$('b_'+b.id+'_md').value.trim(),who:$('b_'+b.id+'_who').value,before:+$('b_'+b.id+'_before').value||0,after:+$('b_'+b.id+'_after').value||0,start:$('b_'+b.id+'_start').value||'00:00',end:endVal('b_'+b.id+'_end')}; }
-  return {preset:$('preset').value,type:$('preset').value==='weekly'?'weekly':'blocks',pattern:$('pattern').value.split(/[,\s/-]+/).filter(Boolean),first:$('first').value,xtime:$('xtime').value||'12:00',start:$('start').value,years:+$('years').value||1,
-          move:$('move').value||null,movePre:+$('movepre').value||0,preMoveWeekly:$('premove').checked,limit:+$('limit').value||21,mode:$('mode').value,weekly:readWeekly(),weeksPerCycle:2,holidays,birthdays,showUS:$('showUS').checked,showCA:$('showCA').checked,showPlan:$('showPlan').checked};
+  return {preset:$('preset').value,pattern:$('pattern').value.split(/[,\s/-]+/).filter(Boolean),first:$('first').value,xtime:$('xtime').value||'12:00',start:$('start').value,years:+$('years').value||1,
+          begins:$('begins').value,move:$('move').value||null,movePre:+$('movepre').value||0,ldDate:$('lddate').value||null,weeklyOn:$('weeklyon').checked,limit:+$('limit').value||21,mode:$('mode').value,weekly:readWeekly(),weeksPerCycle:2,holidays,birthdays,showUS:$('showUS').checked,showCA:$('showCA').checked,showPlan:$('showPlan').checked};
 }
 function writeConfig(c){
   if(!c)return;
-  $('preset').value=c.preset||'ld'; $('pattern').value=(c.pattern||['21','11']).join(','); $('first').value=c.first||'M'; $('xtime').value=c.xtime||'12:00'; $('start').value=c.start||'2027-01-01'; $('years').value=c.years||2;
-  $('move').value=c.move||''; $('movepre').value=c.movePre??5; $('premove').checked=c.preMoveWeekly!==false; $('limit').value=c.limit||21; $('mode').value=c.mode||'cap';
+  $('preset').value=PRESETS[c.preset]?c.preset:'custom'; $('pattern').value=(c.pattern||['21','11']).join(','); $('first').value=c.first||'M'; $('xtime').value=c.xtime||'12:00'; $('start').value=c.start||'2027-01-01'; $('years').value=c.years||2;
+  $('begins').value=c.begins||'move'; $('move').value=c.move||''; $('movepre').value=c.movePre??5; $('lddate').value=c.ldDate||''; $('weeklyon').checked=c.weeklyOn!==false; $('limit').value=c.limit||21; $('mode').value=c.mode||'cap';
   setWeekly(c.weekly&&c.weekly.length?c.weekly:WEEKLY_PLAN);
   for(const h of CAT){ const s=c.holidays&&c.holidays[h.id]; if(!s)continue; $('h_'+h.id+'_on').checked=!!s.on; $('h_'+h.id+'_who').value=s.who; $('h_'+h.id+'_before').value=s.before; $('h_'+h.id+'_after').value=s.after; $('h_'+h.id+'_start').value=s.start; const eod=s.end==='24:00'; $('h_'+h.id+'_end_eod').checked=eod; $('h_'+h.id+'_end').disabled=eod; if(!eod)$('h_'+h.id+'_end').value=s.end; $('h_'+h.id+'_dates').value=s.dates||''; }
   for(const b of BDS){ const s=c.birthdays&&c.birthdays[b.id]; if(!s)continue; $('b_'+b.id+'_on').checked=!!s.on; $('b_'+b.id+'_md').value=s.md||''; $('b_'+b.id+'_who').value=s.who; $('b_'+b.id+'_before').value=s.before; $('b_'+b.id+'_after').value=s.after; $('b_'+b.id+'_start').value=s.start; const eod=s.end==='24:00'; $('b_'+b.id+'_end_eod').checked=eod; $('b_'+b.id+'_end').disabled=eod; if(!eod)$('b_'+b.id+'_end').value=s.end; }
@@ -478,7 +482,7 @@ function loadPlanSet(){
     $('h_'+h.id+'_on').checked=on; $('h_'+h.id+'_who').value=v.who; $('h_'+h.id+'_before').value=v.before; $('h_'+h.id+'_after').value=v.after; $('h_'+h.id+'_start').value=v.start; const eod=v.end==='24:00'; $('h_'+h.id+'_end_eod').checked=eod; $('h_'+h.id+'_end').disabled=eod; if(!eod)$('h_'+h.id+'_end').value=v.end; }
 }
 function planDefaults(){
-  $('preset').value='ld'; applyPreset(); $('start').value='2027-01-01'; $('years').value=2; $('move').value=''; $('movepre').value=5; $('premove').checked=true; $('limit').value=21; $('mode').value='cap';
+  $('preset').value='ld'; $('pattern').value='21,11'; $('first').value='F'; $('xtime').value='12:00'; $('start').value='2027-01-01'; $('years').value=2; $('begins').value='move'; $('move').value=''; $('movepre').value=5; $('lddate').value=''; $('weeklyon').checked=true; $('limit').value=21; $('mode').value='cap';
   setWeekly(WEEKLY_PLAN); loadPlanSet();
   for(const b of BDS){ const d=b.plan; $('b_'+b.id+'_on').checked=d.on; $('b_'+b.id+'_md').value=d.md; $('b_'+b.id+'_who').value=d.who; $('b_'+b.id+'_before').value=d.before; $('b_'+b.id+'_after').value=d.after; $('b_'+b.id+'_start').value=d.start; const eod=d.end==='24:00'; $('b_'+b.id+'_end_eod').checked=eod; $('b_'+b.id+'_end').disabled=eod; if(!eod)$('b_'+b.id+'_end').value=d.end; }
   $('showUS').checked=true;$('showCA').checked=true;$('showPlan').checked=true; applyPreset(); filterHolidays();
@@ -499,7 +503,9 @@ function render(r,c){
   const fl=$('flags');
   if(r.over.length){ fl.innerHTML=`<p class="flag" style="margin:0">${r.over.length} stretch${r.over.length>1?'es':''} over ${c.limit} days:</p><ul class="flags">`+r.over.map(sg=>`<li><span class="mono">${ymd(sg.s)} ${hm(sg.s)}</span> to <span class="mono">${ymd(sg.e)} ${hm(sg.e)}</span>: ${fmt1(sg.h/24)} days with ${PN[sg.p]}</li>`).join('')+'</ul>'; }
   else fl.innerHTML=`<p class="ok" style="margin:0">No stretch over ${c.limit} days.</p>`;
-  if(r.ldStart!==null) fl.innerHTML+=`<p class="help">Block cycle begins <span class="mono">${ymd(r.ldStart)} ${hm(r.ldStart)}</span>; the two-week schedule applies before that.</p>`;
+  if(r.ldStart!==null) fl.innerHTML+=`<p class="help">Long distance schedule begins <span class="mono">${ymd(r.ldStart)} ${hm(r.ldStart)}</span>. The same city schedule applies before that.</p>`;
+  else if(r.noMove) fl.innerHTML+=`<p class="help">No move date entered, so this shows the same city schedule only. Enter the move date in the long distance box to add the 21/11 blocks from five days before it.</p>`;
+  else if(r.begins==='never') fl.innerHTML+=`<p class="help">Same city schedule only.</p>`;
   let html='';
   for(let y=r.y0;y<r.y0+r.years;y++){
     html+=`<div class="year"><h3>${y}</h3><div class="months">`;
@@ -524,7 +530,7 @@ function render(r,c){
 }
 function run(){
   const c=readConfig();
-  try{ RESULT=computeSchedule(c); render(RESULT,c); try{localStorage.setItem('cc2',JSON.stringify(c));$('saved').textContent='Settings saved in this browser.';}catch(e){} }
+  try{ RESULT=computeSchedule(c); render(RESULT,c); try{localStorage.setItem('cc3',JSON.stringify(c));$('saved').textContent='Settings saved in this browser.';}catch(e){} }
   catch(e){ $('flags').innerHTML=`<p class="flag">${esc(e.message)}</p>`; }
 }
 // exports
@@ -550,9 +556,9 @@ function saveFile(name,text,mime){
 }
 // wiring
 buildHolidayTable(); buildBirthdayTable(); setWeekly(WEEKLY_PLAN); loadPlanSet();
-let saved=null; try{saved=JSON.parse(localStorage.getItem('cc2')||'null');}catch(e){}
+let saved=null; try{saved=JSON.parse(localStorage.getItem('cc3')||'null');}catch(e){}
 if(saved)writeConfig(saved); else planDefaults();
-$('preset').addEventListener('change',applyPreset); $('move').addEventListener('change',applyPreset); $('premove').addEventListener('change',applyPreset);
+$('preset').addEventListener('change',applyPreset); $('begins').addEventListener('change',applyPreset); $('weeklyon').addEventListener('change',applyPreset);
 $('addrow').addEventListener('click',()=>$('weekly').querySelector('tbody').appendChild(weeklyRow({week:1,parent:'F',sd:5,st:'17:00',ed:0,et:'17:00'})));
 $('planset').addEventListener('click',()=>{loadPlanSet();filterHolidays();});
 $('holnone').addEventListener('click',()=>{CAT.forEach(h=>$('h_'+h.id+'_on').checked=false);filterHolidays();});
