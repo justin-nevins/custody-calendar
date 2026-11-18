@@ -94,6 +94,9 @@ ul.flags li{margin:.15rem 0}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 .site-note{color:var(--muted);font-size:.9rem;text-align:center;max-width:70ch;margin:1rem auto 0}
 .status{font-size:.9rem;color:var(--muted)}
+.card .rm{float:right;margin:0 0 .5rem .75rem}
+#schedCards:empty{display:none}
+td input.name{width:12rem}
 @media (max-width:600px){ body{font-size:15px} .panel{padding:.8rem} td input.dates{width:16rem} }
 @media print{ body{background:#fff;color:#000;padding:0} .panel.controls,.actions,.site-note,button{display:none !important} .panel{border:0;padding:0} .months{grid-template-columns:repeat(3,1fr)} .month{break-inside:avoid} .tablebox{overflow:visible;border:0} th{position:static} }
 @media (prefers-reduced-motion: reduce){ *{transition:none !important} }
@@ -107,44 +110,13 @@ ul.flags li{margin:.15rem 0}
 </header>
 
 <section class="panel controls">
-  <h2>Schedule <small>times are whole hours, local to wherever the exchange happens</small></h2>
+  <h2>Schedule <small>times are whole hours, local to wherever the exchange happens; press Build the calendar after any change</small></h2>
   <div class="grid">
     <fieldset>
-      <legend>Regular cycle</legend>
+      <legend>Calendar</legend>
       <div class="fields wide">
-        <label class="f span2"><span class="l">Cycle type</span>
-          <select id="preset">
-            <option value="ld">Long distance blocks: 21 days with Mother, 11 with Father</option>
-            <option value="7-7">Alternating weeks: 7 and 7</option>
-            <option value="2-2-3">2-2-3 (two-week cycle)</option>
-            <option value="2-2-5-5">2-2-5-5 (two-week cycle)</option>
-            <option value="3-4-4-3">3-4-4-3 (two-week cycle)</option>
-            <option value="5-2">Every weekend: 5 and 2</option>
-            <option value="custom">Custom block pattern</option>
-            <option value="weekly">Two-week same city schedule (Week A / Week B)</option>
-          </select></label>
-        <label class="f"><span class="l">Block pattern: Mother days, Father days, ...</span><input type="text" id="pattern" class="md" value="21,11" style="width:9rem"></label>
-        <label class="f"><span class="l">Cycle starts with</span><select id="first"><option value="M">Mother</option><option value="F">Father</option></select></label>
-        <label class="f"><span class="l">Exchange time</span><input type="time" id="xtime" value="12:00" step="3600"></label>
-        <label class="f"><span class="l">Cycle start date</span><input type="date" id="start" value="2027-01-01"></label>
+        <label class="f"><span class="l">Calendar start date</span><input type="date" id="start" value="2027-01-01"></label>
         <label class="f"><span class="l">Years to show</span><input type="number" id="years" value="2" min="1" max="10"></label>
-      </div>
-      <p class="help">The pattern lists days in turn: Mother, Father, Mother, Father. 21,11 means 21 days with Mother then 11 with Father; 2,2,3,2,2,3 is the two-week 2-2-3. "Cycle starts with" picks whose block opens the cycle on the start date at the exchange time.</p>
-    </fieldset>
-
-    <fieldset>
-      <legend>Move date and the switch between schedules</legend>
-      <div class="fields wide">
-        <label class="f"><span class="l">Moving parent's move date (optional)</span><input type="date" id="move"></label>
-        <label class="f"><span class="l">Blocks begin this many days before</span><input type="number" id="movepre" value="5" min="0" max="60"></label>
-        <label class="f span2 check" style="align-self:end"><input type="checkbox" id="premove" checked> Until then, use the two-week same city schedule</label>
-      </div>
-      <p class="help">With a move date, the block cycle starts at the exchange time this many days before the move, with the first block as chosen above. Before that, the two-week schedule below applies from the cycle start date.</p>
-    </fieldset>
-
-    <fieldset>
-      <legend>Day limit</legend>
-      <div class="fields wide">
         <label class="f"><span class="l">Longest stretch with one parent (days)</span><input type="number" id="limit" value="21" min="1" max="90"></label>
         <label class="f span2"><span class="l">When a holiday pushes a stretch over the limit</span>
           <select id="mode">
@@ -152,48 +124,37 @@ ul.flags li{margin:.15rem 0}
             <option value="none">Do nothing, only flag it</option>
           </select></label>
       </div>
-      <p class="help">The excess comes from the regular time next to the holiday: from the end of the stretch where it meets the other parent's next block; if the stretch ends with a holiday, from its start; if both ends are holidays, from the end of the regular time inside it. The cycle keeps its original dates.</p>
+      <p class="help">The excess under the limit rule comes from the regular time next to the holiday: from the end of the stretch where it meets the other parent's next block; if the stretch ends with a holiday, from its start; if both ends are holidays, from the end of the regular time inside it. The cycle keeps its original dates.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Add to the schedule</legend>
+      <div class="fields wide">
+        <label class="f span2"><span class="l">Pick a schedule, holiday, birthday or custom period</span><select id="picker"></select></label>
+      </div>
+      <div class="actions" style="margin-top:.6rem">
+        <button type="button" class="primary" id="addItem">Add to the schedule</button>
+        <button type="button" id="planload">Load the parenting plan schedule</button>
+        <button type="button" id="clearAll">Remove everything</button>
+      </div>
+      <p class="help">Everything you add appears under "Your schedule" with its own settings and a Remove button. Add a regular schedule first (the long distance blocks, the same city two-week schedule, or both), then the holidays and birthdays that apply. A custom period takes any dates you type.</p>
     </fieldset>
   </div>
 
-  <fieldset style="margin-top:1rem" id="weeklyBox">
-    <legend>Two-week same city schedule</legend>
-    <p class="help" style="margin:0 0 .6rem">Week 1 starts on the Monday on or before the cycle start date. Each row gives one parent a period inside the two weeks; the other parent has all the time not listed.</p>
-    <div class="tablebox"><table id="weekly">
-      <thead><tr><th>Week</th><th>Parent</th><th>From</th><th></th><th>To</th><th></th><th></th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-    <div class="actions"><button type="button" class="small" id="addrow">Add a period</button></div>
-  </fieldset>
-
   <fieldset style="margin-top:1rem">
-    <legend>Holidays <span class="status" id="holcount"></span></legend>
-    <p class="help" style="margin:0 0 .6rem">Tick a holiday to make it a parenting period. "Days before" and "days after" widen it around the holiday. The start time applies on the first day and the end time on the last day; "end of day" means midnight at the end of that day. Specific dates replace the computed dates for the years you list, written as <span class="mono">2027-11-22 10:00 to 2027-11-29 10:00</span>, several separated by semicolons.</p>
-    <div class="actions" style="margin:0 0 .6rem">
-      <button type="button" class="small" id="planset">Load the parenting plan holiday set</button>
-      <button type="button" class="small" id="holnone">Untick all</button>
-      <label class="check"><input type="checkbox" id="showUS" checked> United States</label>
-      <label class="check"><input type="checkbox" id="showCA" checked> Canada</label>
-      <label class="check"><input type="checkbox" id="showPlan" checked> Parenting plan periods</label>
-    </div>
-    <div class="tablebox"><table id="holtable">
-      <thead><tr><th>On</th><th>Holiday</th><th>Date rule</th><th>Goes to</th><th class="num">Days before</th><th class="num">Days after</th><th>Starts</th><th>Ends</th><th>Specific dates (optional)</th></tr></thead>
+    <legend>Your schedule <span class="status" id="itemcount"></span></legend>
+    <p class="help" id="emptyMsg" style="margin:0 0 .6rem">Nothing added yet. Pick an item above and press "Add to the schedule", or load the parenting plan schedule.</p>
+    <div class="grid" id="schedCards"></div>
+    <div class="tablebox" id="itemsBox" style="margin-top:.9rem"><table id="items">
+      <thead><tr><th>Item</th><th>When</th><th>Goes to</th><th class="num">Days before</th><th class="num">Days after</th><th>Starts</th><th>Ends</th><th>Specific dates</th><th></th></tr></thead>
       <tbody></tbody>
     </table></div>
-  </fieldset>
-
-  <fieldset style="margin-top:1rem">
-    <legend>Birthdays</legend>
-    <div class="tablebox"><table id="bdtable">
-      <thead><tr><th>On</th><th>Whose</th><th>Date (MM-DD)</th><th>Goes to</th><th class="num">Days before</th><th class="num">Days after</th><th>Starts</th><th>Ends</th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-    <p class="help">Enter a date (MM-DD) and tick the row to make a birthday a parenting period. The parents' rows are preset to the plan's period, 4:00 p.m. on the birthday to 10:00 a.m. the next day. Birthdays and Mother's Day and Father's Day outrank Thanksgiving and Christmas, which outrank vacation periods, which outrank the regular cycle.</p>
+    <p class="help">"Days before" and "days after" widen a period around its day. The start time applies on the first day and the end time on the last day; "end of day" means midnight at the end of that day. Specific dates replace the computed dates for the years you list, written as <span class="mono">2027-11-22 10:00 to 2027-11-29 10:00</span>, several separated by semicolons. Order of priority when periods overlap: birthdays, Mother's Day and Father's Day; then Thanksgiving and Christmas; then vacation periods; then the regular schedule.</p>
   </fieldset>
 
   <div class="actions">
     <button type="button" class="primary" id="run">Build the calendar</button>
-    <button type="button" id="reset">Reset to the parenting plan defaults</button>
+    <button type="button" id="reset">Reset to the parenting plan schedule</button>
     <span class="status" id="saved"></span>
   </div>
 </section>
@@ -308,8 +269,8 @@ function periodsFor(entry,cfg,y,day){
   return list;
 }
 
-/* config = {start:'YYYY-MM-DD', years, type:'blocks'|'weekly', pattern:[21,11], first:'M', xtime:'12:00', weekly:[rows], weeksPerCycle:2,
-             move:'YYYY-MM-DD'|null, movePre:5, preMoveWeekly:true, limit:21, mode:'cap'|'none',
+/* config = {start:'YYYY-MM-DD', years, pattern:[21,11], first:'M', xtime:'12:00', weekly:[rows], weeksPerCycle:2,
+             begins:'move'|'date'|'start'|'never', move:'YYYY-MM-DD'|null, movePre:5, ldDate:'YYYY-MM-DD'|null, weeklyOn:true, limit:21, mode:'cap'|'none',
              holidays:{id:{on,who,before,after,start,end,dates}}, birthdays:{id:{on,md,who,before,after,start,end}}} */
 function computeSchedule(c){
   const start=parseDate(c.start); if(start===null)throw new Error('Start date is missing');
@@ -319,15 +280,17 @@ function computeSchedule(c){
   const src=new Int16Array(N); // 0 regular, >0 period index+1, -1 moved by the limit rule
   const P={M:1,F:2}, R={1:'M',2:'F'};
   const xh=parseHours(c.xtime);
-  // phase boundary
-  let ldStart=null;
-  const move=parseDate(c.move);
-  if(move!==null&&c.type==='blocks'&&c.preMoveWeekly){ ldStart=addD(move,-(+c.movePre||0))+xh*HOUR; }
+  // when the block (long distance) schedule begins
+  let begins=c.begins||'start', ldStart=null, noMove=false;
+  if(begins==='move'){ const m=parseDate(c.move); if(m===null){ begins='never'; noMove=true; } else ldStart=addD(m,-(+c.movePre||0))+xh*HOUR; }
+  else if(begins==='date'){ const d=parseDate(c.ldDate); if(d===null)throw new Error('Enter the long distance start date, or choose another "Begins" option.'); ldStart=d+xh*HOUR; }
+  else if(begins==='start'){ ldStart=t0+xh*HOUR; }
+  const weeklyPhase = begins==='never' || (c.weeklyOn!==false && begins!=='start' && ldStart!==null);
   const blocksAnchor = ldStart!==null?ldStart:(t0+xh*HOUR);
-  const pattern=(c.pattern||[]).map(Number).filter(n=>n>0); if(c.type==='blocks'&&!pattern.length)throw new Error('Block pattern needs at least one number');
-  const cycleLen=pattern.reduce((a,b)=>a+b,0);
+  const pattern=(c.pattern||[]).map(Number).filter(n=>n>0); if(begins!=='never'&&!pattern.length)throw new Error('Block pattern needs at least one number');
+  const cycleLen=pattern.reduce((a,b)=>a+b,0)||1;
   // pattern entries alternate Mother, Father, Mother, Father...; "first" rotates the cycle so it opens with that parent's first block
-  let order=pattern.map((n,k)=>({p:k%2===0?1:2,n}));
+  let order=pattern.length?pattern.map((n,k)=>({p:k%2===0?1:2,n})):[{p:1,n:1}];
   if(c.first==='F'){ const k=order.findIndex(o=>o.p===2); if(k>0)order=order.slice(k).concat(order.slice(0,k)); }
   const blockParent=(t)=>{ // which parent has hour t under the block cycle
     let off=Math.floor((t-blocksAnchor)/DAYMS); off=((off%cycleLen)+cycleLen)%cycleLen;
@@ -346,7 +309,7 @@ function computeSchedule(c){
     }
     return rows.length&&rows[0].parent==='F'?1:(rows.length?2:1);
   };
-  const inWeekly=(t)=> c.type==='weekly' || (ldStart!==null && t<ldStart);
+  const inWeekly=(t)=> begins==='never' || (weeklyPhase && t<ldStart);
   for(let i=0;i<N;i++){ const t=t0+i*HOUR; par[i]= inWeekly(t)?weeklyParent(t):blockParent(t); }
   // periods
   const periods=[];
@@ -354,6 +317,7 @@ function computeSchedule(c){
     for(const h of CAT){ const cfg=c.holidays&&c.holidays[h.id]; if(!cfg||!cfg.on)continue; for(const p of periodsFor(h,cfg,y,h.rule(y)))periods.push(p); }
     for(const b of BDS){ const cfg=c.birthdays&&c.birthdays[b.id]; if(!cfg||!cfg.on)continue; const m=/^(\d{1,2})-(\d{1,2})$/.exec((cfg.md||'').trim()); const day=m?utc(y,+m[1],+m[2]):null; for(const p of periodsFor({name:b.name,pri:1},cfg,y,day))periods.push(p); }
   }
+  for(const cu of (c.customs||[])){ for(const [ps,pe] of parsePeriods(cu.dates)){ const y=new Date(ps).getUTCFullYear(); periods.push({s:ps,e:pe,who:whoFor(cu.who||'M',y),name:cu.name||'Custom period',pri:+cu.pri||3,sameCity:false}); } }
   periods.sort((a,b)=>b.pri-a.pri); // low priority first, high priority painted last
   periods.forEach((p,k)=>{p.idx=k+1;});
   for(const p of periods){
@@ -367,7 +331,7 @@ function computeSchedule(c){
     while(i<N){
       const p=par[i]; const s=i; while(i<N&&par[i]===p)i++;
       const e=i; // run [s,e) with parent p
-      if(ldStart!==null && t0+s*HOUR<ldStart)continue; // same city phase is not under the rule
+      if(weeklyPhase && (begins==='never' || t0+s*HOUR<ldStart))continue; // same city phase is not under the rule
       let ex=e-s-limitH; if(ex<=0)continue;
       ex=Math.ceil(ex/24)*24; const other=3-p;
       const isHol=k=>src[k]>0;
@@ -406,7 +370,7 @@ function computeSchedule(c){
     const ex=exchanges.some(x=>x.t>=t&&x.t<t+DAYMS);
     days[ymd(t)]={first,second,firstH,m,f,hol,cap,bad,ex};
   }
-  return {t0,t1,y0,years,segs,exchanges,summary,over,days,periods,limitH,movedH,ldStart};
+  return {t0,t1,y0,years,segs,exchanges,summary,over,days,periods,limitH,movedH,ldStart:(weeklyPhase&&begins!=='never')?ldStart:null,weeklyPhase,begins,noMove};
 }
 if(typeof module!=='undefined'){module.exports={computeSchedule,CAT,BDS,PLANSET,WEEKLY_PLAN,parsePeriods,easter,nth,last,monBefore,ymd,hm};}
 </script>
@@ -416,90 +380,129 @@ if(typeof module!=='undefined'){module.exports={computeSchedule,CAT,BDS,PLANSET,
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const WHO=[['M','Mother'],['F','Father'],['Modd','Mother odd years / Father even'],['Meven','Mother even years / Father odd']];
-const whoSel=(id,val)=>`<select id="${id}">${WHO.map(([v,l])=>`<option value="${v}"${v===val?' selected':''}>${l}</option>`).join('')}</select>`;
-const timeIn=(id,val)=>`<input type="time" id="${id}" value="${val==='24:00'?'':val}" step="3600"${val==='24:00'?' data-eod="1"':''}>`;
-const endSel=(id,val)=>`<span style="display:inline-flex;gap:.3rem;align-items:center"><input type="time" id="${id}" value="${val==='24:00'?'00:00':val}" step="3600"${val==='24:00'?' disabled':''}><label class="check" style="font-size:.85rem"><input type="checkbox" id="${id}_eod"${val==='24:00'?' checked':''}> end of day</label></span>`;
-const endVal=id=>$(id+'_eod').checked?'24:00':($(id).value||'00:00');
+const PN={M:'Mother',F:'Father'};
+const MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const PRESETS={'ld':{pattern:'21,11',first:'F',xtime:'12:00'},'7-7':{pattern:'7,7',first:'M',xtime:'17:00'},'2-2-3':{pattern:'2,2,3,2,2,3',first:'M',xtime:'17:00'},'2-2-5-5':{pattern:'2,2,5,5',first:'M',xtime:'17:00'},'3-4-4-3':{pattern:'3,4,4,3',first:'M',xtime:'17:00'},'5-2':{pattern:'5,2',first:'M',xtime:'17:00'}};
+const PRESET_LABELS={'ld':'21 days with Mother, 11 with Father','7-7':'Alternating weeks: 7 and 7','2-2-3':'2-2-3 (two-week cycle)','2-2-5-5':'2-2-5-5 (two-week cycle)','3-4-4-3':'3-4-4-3 (two-week cycle)','5-2':'Every weekend: 5 and 2','custom':'Custom pattern'};
 
-function holidayDefaults(h){ return h.plan?{on:false,...h.plan,dates:''}:{on:false,who:'Modd',before:0,after:0,start:'00:00',end:'24:00',dates:''}; }
-function buildHolidayTable(){
-  const tb=$('holtable').querySelector('tbody'); let html='';
-  const groups=[['US','United States'],['Canada','Canada'],['Both','United States and Canada'],['Plan','Parenting plan periods']];
-  for(const [g,label] of groups){
-    html+=`<tr class="group" data-g="${g}"><td colspan="9">${label}</td></tr>`;
-    for(const h of CAT.filter(h=>h.region===g)){ const d=holidayDefaults(h);
-      html+=`<tr data-g="${g}" data-id="${h.id}"><td><input type="checkbox" id="h_${h.id}_on"></td><td>${esc(h.name)}</td><td class="status">${esc(h.ruleText)}</td><td>${whoSel('h_'+h.id+'_who',d.who)}</td><td class="num"><input type="number" id="h_${h.id}_before" value="${d.before}" min="0" max="30"></td><td class="num"><input type="number" id="h_${h.id}_after" value="${d.after}" min="0" max="30"></td><td>${timeIn('h_'+h.id+'_start',d.start)}</td><td>${endSel('h_'+h.id+'_end',d.end)}</td><td><input type="text" class="dates" id="h_${h.id}_dates" placeholder="2027-11-22 10:00 to 2027-11-29 10:00; 2028-..."></td></tr>`;
+// ----- state: the list of things added to the schedule -----
+let ITEMS=[];
+const newLd=()=>({kind:'ld',preset:'ld',pattern:'21,11',first:'F',xtime:'12:00',begins:'move',move:'',movePre:5,ldDate:''});
+const newWeekly=()=>({kind:'weekly',rows:WEEKLY_PLAN.map(r=>({...r}))});
+function newHoliday(id){ const h=CAT.find(x=>x.id===id); const d=h.plan?{...h.plan}:{who:'Modd',before:0,after:0,start:'00:00',end:'24:00'}; const p=PLANSET[id]; return {kind:'holiday',id,...d,...(p||{}),dates:''}; }
+function newBirthday(id){ const b=BDS.find(x=>x.id===id); return {kind:'birthday',id,...b.plan}; }
+const newCustom=()=>({kind:'custom',name:'Custom period',who:'M',dates:'',pri:3});
+function planItems(){
+  return [newLd(),newWeekly(),...['mothers','fathers','thanksus','prexmas','xmasper','nyper','febtime','maytime'].map(newHoliday),newBirthday('child')];
+}
+function buildPicker(){
+  const groups=[['Regular schedules',[['ld','Long distance schedule (blocks, e.g. 21/11)'],['weekly','Same city schedule (two-week, Week A / Week B)']]],
+    ['Holidays - United States',CAT.filter(h=>h.region==='US').map(h=>['h:'+h.id,h.name])],
+    ['Holidays - Canada',CAT.filter(h=>h.region==='Canada').map(h=>['h:'+h.id,h.name])],
+    ['Holidays - United States and Canada',CAT.filter(h=>h.region==='Both').map(h=>['h:'+h.id,h.name])],
+    ['Parenting plan periods',CAT.filter(h=>h.region==='Plan').map(h=>['h:'+h.id,h.name+' ('+h.ruleText+')'])],
+    ['Birthdays',BDS.map(b=>['b:'+b.id,b.name])],
+    ['Other',[['custom','Custom period (dates you type)']]]];
+  $('picker').innerHTML=groups.map(([g,opts])=>`<optgroup label="${esc(g)}">${opts.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join('')}</optgroup>`).join('');
+}
+function addFromPicker(){
+  const v=$('picker').value; let item=null, key=null;
+  if(v==='ld'){item=newLd();key=i=>i.kind==='ld'}
+  else if(v==='weekly'){item=newWeekly();key=i=>i.kind==='weekly'}
+  else if(v==='custom'){item=newCustom()}
+  else if(v.startsWith('h:')){const id=v.slice(2);item=newHoliday(id);key=i=>i.kind==='holiday'&&i.id===id}
+  else if(v.startsWith('b:')){const id=v.slice(2);item=newBirthday(id);key=i=>i.kind==='birthday'&&i.id===id}
+  if(key&&ITEMS.some(key)){ $('saved').textContent='Already in your schedule.'; return; }
+  ITEMS.push(item); renderItems(); $('saved').textContent='Added. Press "Build the calendar" to see it.';
+}
+// ----- rendering "Your schedule" -----
+const whoSel=(i,val)=>`<select data-i="${i}" data-k="who">${WHO.map(([v,l])=>`<option value="${v}"${v===val?' selected':''}>${l}</option>`).join('')}</select>`;
+const timeIn=(i,k,val)=>`<input type="time" data-i="${i}" data-k="${k}" value="${val}" step="3600">`;
+const endIn=(i,val)=>{const eod=val==='24:00';return `<span style="display:inline-flex;gap:.3rem;align-items:center"><input type="time" data-i="${i}" data-k="end" value="${eod?'00:00':val}" step="3600"${eod?' disabled':''}><label class="check" style="font-size:.85rem"><input type="checkbox" data-i="${i}" data-k="eod"${eod?' checked':''}> end of day</label></span>`};
+const numIn=(i,k,val)=>`<input type="number" data-i="${i}" data-k="${k}" value="${val}" min="0" max="60">`;
+const daySel=(i,r,k,val)=>`<select data-i="${i}" data-r="${r}" data-k="${k}">${DOWN.map((d,n)=>`<option value="${n}"${n===val?' selected':''}>${d}</option>`).join('')}</select>`;
+function renderItems(){
+  const cards=[], rows=[];
+  ITEMS.forEach((it,i)=>{
+    if(it.kind==='ld'){
+      cards.push(`<fieldset class="card"><legend>Long distance schedule (blocks)</legend><button type="button" class="small rm" data-i="${i}" data-k="remove">Remove</button>
+        <div class="fields wide">
+          <label class="f span2"><span class="l">Block pattern</span><select data-i="${i}" data-k="preset">${Object.entries(PRESET_LABELS).map(([v,l])=>`<option value="${v}"${v===it.preset?' selected':''}>${l}</option>`).join('')}</select></label>
+          <label class="f"><span class="l">Days: Mother, Father, Mother, ...</span><input type="text" class="md" style="width:9rem" data-i="${i}" data-k="pattern" value="${esc(it.pattern)}"></label>
+          <label class="f"><span class="l">Cycle starts with</span><select data-i="${i}" data-k="first"><option value="M"${it.first==='M'?' selected':''}>Mother</option><option value="F"${it.first==='F'?' selected':''}>Father</option></select></label>
+          <label class="f"><span class="l">Exchange time</span>${timeIn(i,'xtime',it.xtime)}</label>
+          <label class="f"><span class="l">Begins</span><select data-i="${i}" data-k="begins">${[['move','Before the move date'],['date','On a date'],['start','At the calendar start']].map(([v,l])=>`<option value="${v}"${v===it.begins?' selected':''}>${l}</option>`).join('')}</select></label>
+          ${it.begins==='move'?`<label class="f"><span class="l">Moving parent's move date</span><input type="date" data-i="${i}" data-k="move" value="${esc(it.move||'')}"></label><label class="f"><span class="l">Days before the move</span>${numIn(i,'movePre',it.movePre)}</label>`:''}
+          ${it.begins==='date'?`<label class="f"><span class="l">Long distance start date</span><input type="date" data-i="${i}" data-k="ldDate" value="${esc(it.ldDate||'')}"></label>`:''}
+        </div>
+        <p class="help">The first block starts at the exchange time on the day the schedule begins, with the parent in "Cycle starts with". The pattern lists days in turn: Mother, Father, Mother, Father. ${it.begins==='move'?'Until it begins, the same city schedule applies if it is in your schedule.':''}</p></fieldset>`);
+    } else if(it.kind==='weekly'){
+      cards.push(`<fieldset class="card"><legend>Same city schedule (two-week)</legend><button type="button" class="small rm" data-i="${i}" data-k="remove">Remove</button>
+        <p class="help" style="margin:0 0 .6rem">Applies from the calendar start until the long distance schedule begins. Week 1 starts on the Monday on or before the calendar start date. Each row gives one parent a period; the other parent has all the time not listed.</p>
+        <div class="tablebox"><table><thead><tr><th>Week</th><th>Parent</th><th>From</th><th></th><th>To</th><th></th><th></th></tr></thead><tbody>
+        ${it.rows.map((r,ri)=>`<tr><td><select data-i="${i}" data-r="${ri}" data-k="week"><option value="1"${r.week===1?' selected':''}>Week 1 (A)</option><option value="2"${r.week===2?' selected':''}>Week 2 (B)</option></select></td><td><select data-i="${i}" data-r="${ri}" data-k="parent"><option value="F"${r.parent==='F'?' selected':''}>Father</option><option value="M"${r.parent==='M'?' selected':''}>Mother</option></select></td><td>${daySel(i,ri,'sd',r.sd)}</td><td><input type="time" data-i="${i}" data-r="${ri}" data-k="st" value="${r.st}" step="3600"></td><td>${daySel(i,ri,'ed',r.ed)}</td><td><input type="time" data-i="${i}" data-r="${ri}" data-k="et" value="${r.et}" step="3600"></td><td><button type="button" class="small" data-i="${i}" data-r="${ri}" data-k="delrow">Remove</button></td></tr>`).join('')}
+        </tbody></table></div><div class="actions"><button type="button" class="small" data-i="${i}" data-k="addrow">Add a period</button></div></fieldset>`);
+    } else if(it.kind==='holiday'){
+      const h=CAT.find(x=>x.id===it.id);
+      rows.push(`<tr><td>${esc(h.name)}</td><td class="status">${esc(h.ruleText)}${h.sameCity?' (same city only)':''}</td><td>${whoSel(i,it.who)}</td><td class="num">${numIn(i,'before',it.before)}</td><td class="num">${numIn(i,'after',it.after)}</td><td>${timeIn(i,'start',it.start)}</td><td>${endIn(i,it.end)}</td><td><input type="text" class="dates" data-i="${i}" data-k="dates" value="${esc(it.dates||'')}" placeholder="2027-11-22 10:00 to 2027-11-29 10:00; ..."></td><td><button type="button" class="small" data-i="${i}" data-k="remove">Remove</button></td></tr>`);
+    } else if(it.kind==='birthday'){
+      const b=BDS.find(x=>x.id===it.id);
+      rows.push(`<tr><td>${esc(b.name)}</td><td><input type="text" class="md" data-i="${i}" data-k="md" value="${esc(it.md||'')}" placeholder="MM-DD"></td><td>${whoSel(i,it.who)}</td><td class="num">${numIn(i,'before',it.before)}</td><td class="num">${numIn(i,'after',it.after)}</td><td>${timeIn(i,'start',it.start)}</td><td>${endIn(i,it.end)}</td><td class="status">type the date as month-day</td><td><button type="button" class="small" data-i="${i}" data-k="remove">Remove</button></td></tr>`);
+    } else if(it.kind==='custom'){
+      rows.push(`<tr><td><input type="text" class="name" data-i="${i}" data-k="name" value="${esc(it.name)}"></td><td class="status">dates at right</td><td>${whoSel(i,it.who)}</td><td class="num status" colspan="4">times are part of the dates</td><td><input type="text" class="dates" data-i="${i}" data-k="dates" value="${esc(it.dates||'')}" placeholder="2027-07-01 10:00 to 2027-07-15 10:00; ..."></td><td><button type="button" class="small" data-i="${i}" data-k="remove">Remove</button></td></tr>`);
     }
-  }
-  tb.innerHTML=html;
-  tb.querySelectorAll('input[id$="_end_eod"]').forEach(cb=>cb.addEventListener('change',()=>{$(cb.id.replace('_eod','')).disabled=cb.checked;}));
+  });
+  $('schedCards').innerHTML=cards.join('');
+  $('items').querySelector('tbody').innerHTML=rows.join('');
+  $('itemsBox').style.display=rows.length?'':'none';
+  $('emptyMsg').style.display=ITEMS.length?'none':'';
+  const n=ITEMS.length; $('itemcount').textContent=n?`${n} item${n>1?'s':''}`:'';
 }
-function buildBirthdayTable(){
-  const tb=$('bdtable').querySelector('tbody');
-  tb.innerHTML=BDS.map(b=>{const d=b.plan;return `<tr><td><input type="checkbox" id="b_${b.id}_on"${d.on?' checked':''}></td><td>${esc(b.name)}</td><td><input type="text" class="md" id="b_${b.id}_md" value="${d.md}" placeholder="MM-DD" pattern="[0-9]{2}-[0-9]{2}"></td><td>${whoSel('b_'+b.id+'_who',d.who)}</td><td class="num"><input type="number" id="b_${b.id}_before" value="${d.before}" min="0" max="30"></td><td class="num"><input type="number" id="b_${b.id}_after" value="${d.after}" min="0" max="30"></td><td>${timeIn('b_'+b.id+'_start',d.start)}</td><td>${endSel('b_'+b.id+'_end',d.end)}</td></tr>`}).join('');
-  tb.querySelectorAll('input[id$="_end_eod"]').forEach(cb=>cb.addEventListener('change',()=>{$(cb.id.replace('_eod','')).disabled=cb.checked;}));
+function onItemChange(e){
+  const t=e.target; if(!t.dataset||t.dataset.i===undefined)return;
+  const it=ITEMS[+t.dataset.i]; const k=t.dataset.k; if(!it)return;
+  if(t.dataset.r!==undefined){ const r=it.rows[+t.dataset.r]; if(k==='week'||k==='sd'||k==='ed')r[k]=+t.value; else r[k]=t.value; return; }
+  if(k==='eod'){ it.end=t.checked?'24:00':'00:00'; renderItems(); return; }
+  if(k==='end'){ it.end=t.value||'00:00'; return; }
+  if(k==='preset'){ it.preset=t.value; const p=PRESETS[t.value]; if(p){it.pattern=p.pattern;it.first=p.first;it.xtime=p.xtime;} renderItems(); return; }
+  if(k==='begins'){ it.begins=t.value; renderItems(); return; }
+  if(k==='before'||k==='after'||k==='movePre'){ it[k]=+t.value||0; return; }
+  it[k]=t.value;
 }
-const daySel=(cls,val)=>`<select class="${cls}">${DOWN.map((d,i)=>`<option value="${i}"${i===val?' selected':''}>${d}</option>`).join('')}</select>`;
-function weeklyRow(r){
-  const tr=document.createElement('tr');
-  tr.innerHTML=`<td><select class="wk"><option value="1"${r.week===1?' selected':''}>Week 1 (A)</option><option value="2"${r.week===2?' selected':''}>Week 2 (B)</option></select></td><td><select class="par"><option value="F"${r.parent==='F'?' selected':''}>Father</option><option value="M"${r.parent==='M'?' selected':''}>Mother</option></select></td><td>${daySel('sd',r.sd)}</td><td><input type="time" class="st" value="${r.st}" step="3600"></td><td>${daySel('ed',r.ed)}</td><td><input type="time" class="et" value="${r.et}" step="3600"></td><td><button type="button" class="small del">Remove</button></td>`;
-  tr.querySelector('.del').addEventListener('click',()=>tr.remove());
-  return tr;
+function onItemClick(e){
+  const t=e.target.closest('button'); if(!t||t.dataset.i===undefined)return;
+  const i=+t.dataset.i, it=ITEMS[i], k=t.dataset.k;
+  if(k==='remove'){ ITEMS.splice(i,1); renderItems(); }
+  else if(k==='addrow'){ it.rows.push({week:1,parent:'F',sd:5,st:'17:00',ed:0,et:'17:00'}); renderItems(); }
+  else if(k==='delrow'){ it.rows.splice(+t.dataset.r,1); renderItems(); }
 }
-function setWeekly(rows){ const tb=$('weekly').querySelector('tbody'); tb.innerHTML=''; rows.forEach(r=>tb.appendChild(weeklyRow(r))); }
-function readWeekly(){ return [...$('weekly').querySelectorAll('tbody tr')].map(tr=>({week:+tr.querySelector('.wk').value,parent:tr.querySelector('.par').value,sd:+tr.querySelector('.sd').value,st:tr.querySelector('.st').value||'00:00',ed:+tr.querySelector('.ed').value,et:tr.querySelector('.et').value||'00:00'})); }
-
-const PRESETS={'ld':{pattern:'21,11',first:'M',xtime:'12:00'},'7-7':{pattern:'7,7',first:'M',xtime:'17:00'},'2-2-3':{pattern:'2,2,3,2,2,3',first:'M',xtime:'17:00'},'2-2-5-5':{pattern:'2,2,5,5',first:'M',xtime:'17:00'},'3-4-4-3':{pattern:'3,4,4,3',first:'M',xtime:'17:00'},'5-2':{pattern:'5,2',first:'M',xtime:'17:00'}};
-function applyPreset(){
-  const v=$('preset').value; const p=PRESETS[v];
-  if(p){$('pattern').value=p.pattern;$('first').value=p.first;$('xtime').value=p.xtime;}
-  const weekly=v==='weekly';
-  $('pattern').disabled=weekly; $('first').disabled=weekly; $('xtime').disabled=weekly;
-  $('weeklyBox').style.display=(weekly||($('move').value&&$('premove').checked))?'':'none';
-}
+// ----- config in and out -----
 function readConfig(){
-  const holidays={}; for(const h of CAT){ holidays[h.id]={on:$('h_'+h.id+'_on').checked,who:$('h_'+h.id+'_who').value,before:+$('h_'+h.id+'_before').value||0,after:+$('h_'+h.id+'_after').value||0,start:$('h_'+h.id+'_start').value||'00:00',end:endVal('h_'+h.id+'_end'),dates:$('h_'+h.id+'_dates').value}; }
-  const birthdays={}; for(const b of BDS){ birthdays[b.id]={on:$('b_'+b.id+'_on').checked,md:$('b_'+b.id+'_md').value.trim(),who:$('b_'+b.id+'_who').value,before:+$('b_'+b.id+'_before').value||0,after:+$('b_'+b.id+'_after').value||0,start:$('b_'+b.id+'_start').value||'00:00',end:endVal('b_'+b.id+'_end')}; }
-  return {preset:$('preset').value,type:$('preset').value==='weekly'?'weekly':'blocks',pattern:$('pattern').value.split(/[,\s/-]+/).filter(Boolean),first:$('first').value,xtime:$('xtime').value||'12:00',start:$('start').value,years:+$('years').value||1,
-          move:$('move').value||null,movePre:+$('movepre').value||0,preMoveWeekly:$('premove').checked,limit:+$('limit').value||21,mode:$('mode').value,weekly:readWeekly(),weeksPerCycle:2,holidays,birthdays,showUS:$('showUS').checked,showCA:$('showCA').checked,showPlan:$('showPlan').checked};
+  const ld=ITEMS.find(i=>i.kind==='ld'), wk=ITEMS.find(i=>i.kind==='weekly');
+  const holidays={}; ITEMS.filter(i=>i.kind==='holiday').forEach(i=>{holidays[i.id]={on:true,who:i.who,before:i.before,after:i.after,start:i.start||'00:00',end:i.end||'24:00',dates:i.dates};});
+  const birthdays={}; ITEMS.filter(i=>i.kind==='birthday').forEach(i=>{birthdays[i.id]={on:true,md:(i.md||'').trim(),who:i.who,before:i.before,after:i.after,start:i.start||'00:00',end:i.end||'24:00'};});
+  const customs=ITEMS.filter(i=>i.kind==='custom').map(i=>({name:i.name,who:i.who,dates:i.dates,pri:i.pri}));
+  return {start:$('start').value,years:+$('years').value||1,limit:+$('limit').value||21,mode:$('mode').value,
+          pattern:ld?String(ld.pattern).split(/[,\s/-]+/).filter(Boolean):[],first:ld?ld.first:'M',xtime:ld?ld.xtime||'12:00':'12:00',
+          begins:ld?ld.begins:'never',move:ld?ld.move||null:null,movePre:ld?+ld.movePre||0:0,ldDate:ld?ld.ldDate||null:null,
+          weeklyOn:!!wk,weekly:wk?wk.rows:[],weeksPerCycle:2,holidays,birthdays,customs};
 }
-function writeConfig(c){
-  if(!c)return;
-  $('preset').value=c.preset||'ld'; $('pattern').value=(c.pattern||['21','11']).join(','); $('first').value=c.first||'M'; $('xtime').value=c.xtime||'12:00'; $('start').value=c.start||'2027-01-01'; $('years').value=c.years||2;
-  $('move').value=c.move||''; $('movepre').value=c.movePre??5; $('premove').checked=c.preMoveWeekly!==false; $('limit').value=c.limit||21; $('mode').value=c.mode||'cap';
-  setWeekly(c.weekly&&c.weekly.length?c.weekly:WEEKLY_PLAN);
-  for(const h of CAT){ const s=c.holidays&&c.holidays[h.id]; if(!s)continue; $('h_'+h.id+'_on').checked=!!s.on; $('h_'+h.id+'_who').value=s.who; $('h_'+h.id+'_before').value=s.before; $('h_'+h.id+'_after').value=s.after; $('h_'+h.id+'_start').value=s.start; const eod=s.end==='24:00'; $('h_'+h.id+'_end_eod').checked=eod; $('h_'+h.id+'_end').disabled=eod; if(!eod)$('h_'+h.id+'_end').value=s.end; $('h_'+h.id+'_dates').value=s.dates||''; }
-  for(const b of BDS){ const s=c.birthdays&&c.birthdays[b.id]; if(!s)continue; $('b_'+b.id+'_on').checked=!!s.on; $('b_'+b.id+'_md').value=s.md||''; $('b_'+b.id+'_who').value=s.who; $('b_'+b.id+'_before').value=s.before; $('b_'+b.id+'_after').value=s.after; $('b_'+b.id+'_start').value=s.start; const eod=s.end==='24:00'; $('b_'+b.id+'_end_eod').checked=eod; $('b_'+b.id+'_end').disabled=eod; if(!eod)$('b_'+b.id+'_end').value=s.end; }
-  if(c.showUS!==undefined){$('showUS').checked=c.showUS;$('showCA').checked=c.showCA;$('showPlan').checked=c.showPlan;}
-  applyPreset(); filterHolidays();
-}
-function loadPlanSet(){
-  for(const h of CAT){ const d=holidayDefaults(h); const s=PLANSET[h.id]||(h.plan?h.plan:null); const on=!!s; const v=s?{...d,...s}:d;
-    $('h_'+h.id+'_on').checked=on; $('h_'+h.id+'_who').value=v.who; $('h_'+h.id+'_before').value=v.before; $('h_'+h.id+'_after').value=v.after; $('h_'+h.id+'_start').value=v.start; const eod=v.end==='24:00'; $('h_'+h.id+'_end_eod').checked=eod; $('h_'+h.id+'_end').disabled=eod; if(!eod)$('h_'+h.id+'_end').value=v.end; }
-}
-function planDefaults(){
-  $('preset').value='ld'; applyPreset(); $('start').value='2027-01-01'; $('years').value=2; $('move').value=''; $('movepre').value=5; $('premove').checked=true; $('limit').value=21; $('mode').value='cap';
-  setWeekly(WEEKLY_PLAN); loadPlanSet();
-  for(const b of BDS){ const d=b.plan; $('b_'+b.id+'_on').checked=d.on; $('b_'+b.id+'_md').value=d.md; $('b_'+b.id+'_who').value=d.who; $('b_'+b.id+'_before').value=d.before; $('b_'+b.id+'_after').value=d.after; $('b_'+b.id+'_start').value=d.start; const eod=d.end==='24:00'; $('b_'+b.id+'_end_eod').checked=eod; $('b_'+b.id+'_end').disabled=eod; if(!eod)$('b_'+b.id+'_end').value=d.end; }
-  $('showUS').checked=true;$('showCA').checked=true;$('showPlan').checked=true; applyPreset(); filterHolidays();
-}
-function filterHolidays(){
-  const show={US:$('showUS').checked,Canada:$('showCA').checked,Both:$('showUS').checked||$('showCA').checked,Plan:$('showPlan').checked};
-  $('holtable').querySelectorAll('tbody tr').forEach(tr=>{tr.style.display=show[tr.dataset.g]?'':'none';});
-  const n=CAT.filter(h=>$('h_'+h.id+'_on').checked).length; $('holcount').textContent=n?`${n} ticked`:'';
-}
+function calDefaults(){ $('start').value='2027-01-01'; $('years').value=2; $('limit').value=21; $('mode').value='cap'; }
+function saveState(){ try{localStorage.setItem('cc4',JSON.stringify({cal:{start:$('start').value,years:$('years').value,limit:$('limit').value,mode:$('mode').value},items:ITEMS}));}catch(e){} }
+function loadState(){ try{const s=JSON.parse(localStorage.getItem('cc4')||'null'); if(!s||!Array.isArray(s.items))return false; $('start').value=s.cal.start||'2027-01-01'; $('years').value=s.cal.years||2; $('limit').value=s.cal.limit||21; $('mode').value=s.cal.mode||'cap'; ITEMS=s.items; return true;}catch(e){return false} }
 
 let RESULT=null;
 const fmt1=n=>(Math.round(n*10)/10).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:1});
-const PN={M:'Mother',F:'Father'};
-const MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
 function render(r,c){
   const tb=$('summary').querySelector('tbody');
   tb.innerHTML=r.summary.map(s=>`<tr><td>${s.y}</td><td class="num">${fmt1(s.mDays)}</td><td class="num">${fmt1(s.fDays)}</td><td class="num">${s.ex}</td><td class="num">${fmt1(s.lm)}</td><td class="num">${fmt1(s.lf)}</td><td class="num ${s.over.length?'flag':'ok'}">${s.over.length?s.over.length+' stretch'+(s.over.length>1?'es':''):'none'}</td><td class="num">${fmt1(s.moved)}</td></tr>`).join('');
   const fl=$('flags');
   if(r.over.length){ fl.innerHTML=`<p class="flag" style="margin:0">${r.over.length} stretch${r.over.length>1?'es':''} over ${c.limit} days:</p><ul class="flags">`+r.over.map(sg=>`<li><span class="mono">${ymd(sg.s)} ${hm(sg.s)}</span> to <span class="mono">${ymd(sg.e)} ${hm(sg.e)}</span>: ${fmt1(sg.h/24)} days with ${PN[sg.p]}</li>`).join('')+'</ul>'; }
   else fl.innerHTML=`<p class="ok" style="margin:0">No stretch over ${c.limit} days.</p>`;
-  if(r.ldStart!==null) fl.innerHTML+=`<p class="help">Block cycle begins <span class="mono">${ymd(r.ldStart)} ${hm(r.ldStart)}</span>; the two-week schedule applies before that.</p>`;
+  if(r.ldStart!==null) fl.innerHTML+=`<p class="help">Long distance schedule begins <span class="mono">${ymd(r.ldStart)} ${hm(r.ldStart)}</span>. The same city schedule applies before that.</p>`;
+  else if(r.noMove) fl.innerHTML+=`<p class="help">No move date entered yet, so this shows the same city schedule only. Enter the move date on the long distance card to add the blocks from five days before it.</p>`;
+  else if(r.begins==='never'&&c.weeklyOn) fl.innerHTML+=`<p class="help">Same city schedule only.</p>`;
+  else if(r.begins==='never'&&!c.weeklyOn) fl.innerHTML+=`<p class="flag">No regular schedule in your schedule. Add the long distance blocks or the same city schedule.</p>`;
   let html='';
   for(let y=r.y0;y<r.y0+r.years;y++){
     html+=`<div class="year"><h3>${y}</h3><div class="months">`;
@@ -524,10 +527,10 @@ function render(r,c){
 }
 function run(){
   const c=readConfig();
-  try{ RESULT=computeSchedule(c); render(RESULT,c); try{localStorage.setItem('cc2',JSON.stringify(c));$('saved').textContent='Settings saved in this browser.';}catch(e){} }
+  try{ RESULT=computeSchedule(c); render(RESULT,c); saveState(); $('saved').textContent='Built. Settings saved in this browser.'; }
   catch(e){ $('flags').innerHTML=`<p class="flag">${esc(e.message)}</p>`; }
 }
-// exports
+// ----- exports -----
 const icsDate=t=>new Date(t).toISOString().replace(/[-:]/g,'').slice(0,15);
 function ics(){
   const r=RESULT; const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//custody-calendar.com//planner//EN','CALSCALE:GREGORIAN'];
@@ -548,18 +551,17 @@ function saveFile(name,text,mime){
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type:mime})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
   $('savemsg').textContent=`Saved ${name}`;
 }
-// wiring
-buildHolidayTable(); buildBirthdayTable(); setWeekly(WEEKLY_PLAN); loadPlanSet();
-let saved=null; try{saved=JSON.parse(localStorage.getItem('cc2')||'null');}catch(e){}
-if(saved)writeConfig(saved); else planDefaults();
-$('preset').addEventListener('change',applyPreset); $('move').addEventListener('change',applyPreset); $('premove').addEventListener('change',applyPreset);
-$('addrow').addEventListener('click',()=>$('weekly').querySelector('tbody').appendChild(weeklyRow({week:1,parent:'F',sd:5,st:'17:00',ed:0,et:'17:00'})));
-$('planset').addEventListener('click',()=>{loadPlanSet();filterHolidays();});
-$('holnone').addEventListener('click',()=>{CAT.forEach(h=>$('h_'+h.id+'_on').checked=false);filterHolidays();});
-['showUS','showCA','showPlan'].forEach(id=>$(id).addEventListener('change',filterHolidays));
-$('holtable').addEventListener('change',e=>{if(e.target.type==='checkbox'&&/_on$/.test(e.target.id))filterHolidays();});
+// ----- wiring -----
+buildPicker();
+if(!loadState()){ calDefaults(); ITEMS=planItems(); }
+renderItems();
+$('addItem').addEventListener('click',addFromPicker);
+$('planload').addEventListener('click',()=>{ITEMS=planItems();renderItems();$('saved').textContent='Parenting plan schedule loaded. Press "Build the calendar".';});
+$('clearAll').addEventListener('click',()=>{ITEMS=[];renderItems();});
+$('schedCards').addEventListener('change',onItemChange); $('items').addEventListener('change',onItemChange);
+$('schedCards').addEventListener('click',onItemClick); $('items').addEventListener('click',onItemClick);
 $('run').addEventListener('click',run);
-$('reset').addEventListener('click',()=>{planDefaults();run();});
+$('reset').addEventListener('click',()=>{calDefaults();ITEMS=planItems();renderItems();run();});
 $('ics').addEventListener('click',()=>{if(!RESULT)run();saveFile('custody-calendar.ics',ics(),'text/calendar');});
 $('csv').addEventListener('click',()=>{if(!RESULT)run();saveFile('custody-calendar.csv',csv(),'text/csv');});
 $('copy').addEventListener('click',async()=>{if(!RESULT)run();const txt=RESULT.exchanges.map(x=>`${ymd(x.t)} ${DOWN[dow(x.t)]} ${hm(x.t)}  ${PN[x.from]} to ${PN[x.to]}  (${x.why})`).join('\n');try{await navigator.clipboard.writeText(txt);$('savemsg').textContent='Exchange list copied.';}catch(e){$('savemsg').textContent='Copy failed; select the table and copy by hand.';}});
