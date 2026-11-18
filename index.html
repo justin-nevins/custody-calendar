@@ -188,7 +188,7 @@ ul.flags li{margin:.15rem 0}
       <thead><tr><th>On</th><th>Whose</th><th>Date (MM-DD)</th><th>Goes to</th><th class="num">Days before</th><th class="num">Days after</th><th>Starts</th><th>Ends</th></tr></thead>
       <tbody></tbody>
     </table></div>
-    <p class="help">Birthdays and Mother's Day and Father's Day outrank Thanksgiving and Christmas, which outrank vacation periods, which outrank the regular cycle.</p>
+    <p class="help">Enter a date (MM-DD) and tick the row to make a birthday a parenting period. The parents' rows are preset to the plan's period, 4:00 p.m. on the birthday to 10:00 a.m. the next day. Birthdays and Mother's Day and Father's Day outrank Thanksgiving and Christmas, which outrank vacation periods, which outrank the regular cycle.</p>
   </fieldset>
 
   <div class="actions">
@@ -278,8 +278,8 @@ const CAT=[
 // Parenting plan settings for the generic rows it uses.
 const PLANSET={mothers:{who:'M',before:2,after:1,start:'17:00',end:'10:00'},fathers:{who:'F',before:2,after:1,start:'17:00',end:'10:00'},thanksus:{who:'Modd',before:3,after:4,start:'10:00',end:'10:00'}};
 const BDS=[{id:'child',name:"Child's birthday",plan:{on:true,md:'',who:'Modd',before:0,after:2,start:'16:00',end:'10:00'}},
-           {id:'mother',name:"Mother's birthday",plan:{on:false,md:'',who:'M',before:0,after:0,start:'00:00',end:'24:00'}},
-           {id:'father',name:"Father's birthday",plan:{on:false,md:'',who:'F',before:0,after:0,start:'00:00',end:'24:00'}}];
+           {id:'mother',name:"Mother's birthday",plan:{on:false,md:'',who:'M',before:0,after:1,start:'16:00',end:'10:00'}},
+           {id:'father',name:"Father's birthday",plan:{on:false,md:'',who:'F',before:0,after:1,start:'16:00',end:'10:00'}}];
 const WEEKLY_PLAN=[{week:1,parent:'F',sd:4,st:'17:00',ed:1,et:'09:00'},{week:2,parent:'F',sd:4,st:'12:00',ed:5,et:'17:00'}];
 
 function whoFor(who,y){ if(who==='M'||who==='F')return who; if(who==='Modd')return (y%2===1)?'M':'F'; return (y%2===0)?'M':'F'; }
