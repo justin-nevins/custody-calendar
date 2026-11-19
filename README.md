@@ -7,3 +7,7 @@ Enter the cycle (days with each parent, who starts, the start date or the moving
 Everything runs in the browser. Nothing is uploaded.
 
 The site is a single file, `index.html`, served by GitHub Pages from `main`.
+
+## License
+
+Copyright (c) 2026 Justin Nevins. All rights reserved. The source code is published for review only. See `LICENSE`.
