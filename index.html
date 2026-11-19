@@ -2,184 +2,289 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Custody Calendar - Rotating Schedule Planner</title>
-<meta name="description" content="Plan a rotating custody schedule with exchange times, holidays and birthdays, see every exchange, and save it as a calendar file.">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Custody Calendar</title>
+<meta name="description" content="Plan a custody schedule step by step: parents, the regular pattern, a schedule change, holidays, vacations and one-time changes. See who has the child today, every exchange, and save it as a calendar file. Runs in your browser.">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: one column of panels. Each panel is a fieldset grid that wraps to one column on phones; tables scroll sideways inside their own box. */
+/* Layout: one app frame; a top bar with three places (Calendar, Settings, Setup); summary first, detail below or beside it. */
 :root{
-  --bg:#f6f7f9; --panel:#ffffff; --ink:#1c2230; --muted:#5b6474; --line:#d6dbe3; --soft:#eef1f5;
-  --mother:#b4457f; --mother-soft:#f3dde9; --father:#1f7a6d; --father-soft:#d6ece7;
-  --flag:#b3261e; --flag-soft:#f9dcd9; --hol:#8a6d00; --hol-soft:#fff3c4; --cap:#2457c5; --cap-soft:#dbe6fb; --focus:#2457c5;
-  --body:'Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',sans-serif;
-  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  --paper:#f7f8fa; --panel:#ffffff; --ink:#1b2430; --ink-2:#55606e; --ink-3:#8b95a3; --line:#dde2e8; --line-2:#eef1f4;
+  --accent:#1f5f8b; --accent-ink:#ffffff;
+  --blue:#2f6db5; --blue-soft:#dce8f7; --blue-ink:#17406e;
+  --orange:#d9772a; --orange-soft:#fbe6d3; --orange-ink:#7a3d0b;
+  --green:#2e8b57; --green-soft:#d8f0e1; --green-ink:#145232;
+  --purple:#7a3fa5; --purple-soft:#eadcf6; --purple-ink:#46205f;
+  --teal:#1f8a8a; --teal-soft:#d4eeee; --teal-ink:#0f4f4f;
+  --pink:#c2457a; --pink-soft:#f8dbe7; --pink-ink:#6e1f42;
+  --holiday:#b48a16; --holiday-soft:#fff3c4;
+  --change:#6b4fbb; --change-soft:#e7e0f8;
+  --warn:#b4322b; --warn-soft:#fbe3e1; --ok:#1e7f4f;
+  --display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible","Helvetica Neue",Arial,system-ui,sans-serif;
+  --mono:"JetBrains Mono","SFMono-Regular",Menlo,Consolas,monospace;
+  --r:8px;
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){ color-scheme:dark;
-    --bg:#13161c; --panel:#1b1f27; --ink:#e8ebf1; --muted:#9aa3b2; --line:#343a46; --soft:#232833;
-    --mother:#e07ab5; --mother-soft:#4a2238; --father:#5cc4b2; --father-soft:#1c3f3a;
-    --flag:#ff7a6e; --flag-soft:#4d1f1b; --hol:#e3c15a; --hol-soft:#3d3416; --cap:#8db0ff; --cap-soft:#22304d; --focus:#8db0ff; }
-}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ color-scheme:dark;
+  --paper:#12171d; --panel:#1a2129; --ink:#e8ecf1; --ink-2:#aab3bf; --ink-3:#7c8694; --line:#2c3541; --line-2:#222a34;
+  --accent:#6fb0e0; --accent-ink:#0d1a26;
+  --blue:#6ea5e6; --blue-soft:#1d3a5e; --blue-ink:#cfe2fa;
+  --orange:#f0995a; --orange-soft:#4a2a10; --orange-ink:#fbdcc2;
+  --green:#5fc08a; --green-soft:#17392a; --green-ink:#c9f0d8;
+  --purple:#b78ae0; --purple-soft:#33204a; --purple-ink:#e6d6f7;
+  --teal:#5fc0c0; --teal-soft:#153a3a; --teal-ink:#cdeeee;
+  --pink:#e37aa8; --pink-soft:#46202f; --pink-ink:#f8d6e4;
+  --holiday:#e3c14f; --holiday-soft:#3d3312;
+  --change:#b39cf0; --change-soft:#2c2347;
+  --warn:#f08078; --warn-soft:#45201e; --ok:#5fc08a; }}
 :root[data-theme="dark"]{ color-scheme:dark;
-  --bg:#13161c; --panel:#1b1f27; --ink:#e8ebf1; --muted:#9aa3b2; --line:#343a46; --soft:#232833;
-  --mother:#e07ab5; --mother-soft:#4a2238; --father:#5cc4b2; --father-soft:#1c3f3a;
-  --flag:#ff7a6e; --flag-soft:#4d1f1b; --hol:#e3c15a; --hol-soft:#3d3416; --cap:#8db0ff; --cap-soft:#22304d; --focus:#8db0ff; }
+  --paper:#12171d; --panel:#1a2129; --ink:#e8ecf1; --ink-2:#aab3bf; --ink-3:#7c8694; --line:#2c3541; --line-2:#222a34;
+  --accent:#6fb0e0; --accent-ink:#0d1a26;
+  --blue:#6ea5e6; --blue-soft:#1d3a5e; --blue-ink:#cfe2fa;
+  --orange:#f0995a; --orange-soft:#4a2a10; --orange-ink:#fbdcc2;
+  --green:#5fc08a; --green-soft:#17392a; --green-ink:#c9f0d8;
+  --purple:#b78ae0; --purple-soft:#33204a; --purple-ink:#e6d6f7;
+  --teal:#5fc0c0; --teal-soft:#153a3a; --teal-ink:#cdeeee;
+  --pink:#e37aa8; --pink-soft:#46202f; --pink-ink:#f8d6e4;
+  --holiday:#e3c14f; --holiday-soft:#3d3312;
+  --change:#b39cf0; --change-soft:#2c2347;
+  --warn:#f08078; --warn-soft:#45201e; --ok:#5fc08a; }
+/* parent colors are chosen in Settings; the root carries data-cm / data-cf */
+:root[data-cm="blue"]{--cM:var(--blue);--cM-soft:var(--blue-soft);--cM-ink:var(--blue-ink)} :root[data-cf="blue"]{--cF:var(--blue);--cF-soft:var(--blue-soft);--cF-ink:var(--blue-ink)}
+:root[data-cm="orange"]{--cM:var(--orange);--cM-soft:var(--orange-soft);--cM-ink:var(--orange-ink)} :root[data-cf="orange"]{--cF:var(--orange);--cF-soft:var(--orange-soft);--cF-ink:var(--orange-ink)}
+:root[data-cm="green"]{--cM:var(--green);--cM-soft:var(--green-soft);--cM-ink:var(--green-ink)} :root[data-cf="green"]{--cF:var(--green);--cF-soft:var(--green-soft);--cF-ink:var(--green-ink)}
+:root[data-cm="purple"]{--cM:var(--purple);--cM-soft:var(--purple-soft);--cM-ink:var(--purple-ink)} :root[data-cf="purple"]{--cF:var(--purple);--cF-soft:var(--purple-soft);--cF-ink:var(--purple-ink)}
+:root[data-cm="teal"]{--cM:var(--teal);--cM-soft:var(--teal-soft);--cM-ink:var(--teal-ink)} :root[data-cf="teal"]{--cF:var(--teal);--cF-soft:var(--teal-soft);--cF-ink:var(--teal-ink)}
+:root[data-cm="pink"]{--cM:var(--pink);--cM-soft:var(--pink-soft);--cM-ink:var(--pink-ink)} :root[data-cf="pink"]{--cF:var(--pink);--cF-soft:var(--pink-soft);--cF-ink:var(--pink-ink)}
+:root{--cM:var(--blue);--cM-soft:var(--blue-soft);--cM-ink:var(--blue-ink);--cF:var(--orange);--cF-soft:var(--orange-soft);--cF-ink:var(--orange-ink)}
+
 *{box-sizing:border-box}
 html,body{margin:0}
-body{background:var(--bg);color:var(--ink);font:16px/1.45 var(--body);padding-block:1.25rem 2rem;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-.wrap{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr);gap:1.25rem}
-header h1{font-size:1.75rem;margin:0 0 .25rem;text-wrap:balance}
-header p{margin:0;color:var(--muted);max-width:75ch}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:1rem 1.1rem}
-.panel h2{font-size:1.1rem;margin:0 0 .75rem}
-.panel h2 small{font-weight:400;color:var(--muted);font-size:.9rem;margin-left:.5rem}
-fieldset{border:1px solid var(--line);border-radius:8px;padding:.75rem .9rem 1rem;margin:0;min-width:0}
-legend{font-weight:700;padding:0 .35rem}
-.grid{display:grid;gap:.9rem 1.25rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));align-items:start}
-.fields{display:grid;gap:.7rem .9rem;grid-template-columns:repeat(auto-fill,minmax(min(100%,150px),1fr))}
-.fields.wide{grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr))}
-label.f{display:grid;gap:.25rem;font-size:.92rem;color:var(--muted);min-width:0}
-label.f>span.l{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-label.f.span2{grid-column:1/-1}
-input,select,button,textarea{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:.4rem .5rem;min-width:0;max-width:100%}
-input[type=number]{width:6.5rem;font-variant-numeric:tabular-nums}
-input[type=time]{width:7.5rem}
-input[type=date]{width:11.5rem}
-input.md{width:6.5rem;font-family:var(--mono)}
-input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
-.check{display:flex;align-items:center;gap:.5rem;color:var(--ink);font-size:.95rem}
-td .check{white-space:nowrap}
-input:disabled{opacity:.4}
-.check input{width:1.05rem;height:1.05rem;margin:0}
-.help{color:var(--muted);font-size:.85rem;margin:.35rem 0 0;max-width:70ch}
-.actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.9rem;align-items:center}
-button{cursor:pointer;background:var(--soft)}
-button.primary{background:var(--ink);color:var(--panel);border-color:var(--ink);font-weight:700}
-button.small{padding:.25rem .55rem;font-size:.85rem}
-.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
-table{border-collapse:collapse;width:100%;font-size:.92rem}
-th,td{padding:.4rem .55rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;white-space:nowrap}
-th{background:var(--soft);font-weight:700;position:sticky;top:0}
-tbody tr:last-child td{border-bottom:0}
-td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
-tr.group td{background:var(--soft);font-weight:700;color:var(--muted);font-size:.85rem;letter-spacing:.02em;text-transform:uppercase}
-td input[type=number]{width:4.6rem}
-td input[type=time]{width:7rem}
-td input.dates{width:24rem;font-family:var(--mono);font-size:.85rem}
-td select{max-width:none}
-.summary td,.summary th{text-align:right}
-.summary td:first-child,.summary th:first-child{text-align:left}
-.legend{display:flex;flex-wrap:wrap;gap:.5rem 1.1rem;font-size:.9rem;color:var(--muted);align-items:center}
-.sw{display:inline-block;width:1rem;height:1rem;border-radius:3px;vertical-align:-3px;margin-right:.35rem;border:1px solid var(--line)}
-.sw.m{background:var(--mother-soft)}.sw.f{background:var(--father-soft)}.sw.h{background:var(--hol-soft)}.sw.bad{background:var(--flag-soft);border-color:var(--flag)}.sw.cap{background:var(--cap-soft);border-color:var(--cap)}
-.year{margin-top:1rem}
-.year h3{font-size:1.05rem;margin:0 0 .6rem}
-.months{display:grid;gap:.9rem;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
-.month{border:1px solid var(--line);border-radius:8px;padding:.5rem .6rem .6rem;background:var(--panel)}
-.month h4{margin:0 0 .35rem;font-size:.95rem}
-.days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-family:var(--mono);font-size:.78rem}
-.days .dow{color:var(--muted);text-align:center;font-size:.7rem;padding:.1rem 0}
-.day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:4px;background:var(--soft);position:relative;line-height:1}
-.day.m{background:var(--mother-soft)}.day.f{background:var(--father-soft)}
-.day.hol::after{content:"";position:absolute;left:3px;right:3px;bottom:2px;height:3px;border-radius:2px;background:var(--hol)}
-.day.cap{outline:2px solid var(--cap);outline-offset:-2px}
-.day.bad{outline:2px solid var(--flag);outline-offset:-2px}
-.day.ex{font-weight:700;text-decoration:underline;text-decoration-thickness:2px}
-.day.blank{background:transparent}
-.flag{color:var(--flag);font-weight:700}
-.ok{color:var(--father)}
-ul.flags{margin:.3rem 0 0;padding-left:1.2rem}
-ul.flags li{margin:.15rem 0}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 40px}
+h1,h2,h3,h4{font-family:var(--display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:22px;font-weight:700} h2{font-size:18px;font-weight:700} h3{font-size:15px;font-weight:700}
+p{margin:0}
+button{font:inherit;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
-.site-note{color:var(--muted);font-size:.9rem;text-align:center;max-width:70ch;margin:1rem auto 0}
-.status{font-size:.9rem;color:var(--muted)}
-.card .rm{float:right;margin:0 0 .5rem .75rem}
-#schedCards:empty{display:none}
-td input.name{width:12rem}
-@media (max-width:600px){ body{font-size:15px} .panel{padding:.8rem} td input.dates{width:16rem} }
-@media print{ body{background:#fff;color:#000;padding:0} .panel.controls,.actions,.site-note,button{display:none !important} .panel{border:0;padding:0} .months{grid-template-columns:repeat(3,1fr)} .month{break-inside:avoid} .tablebox{overflow:visible;border:0} th{position:static} }
-@media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+.muted{color:var(--ink-2)} .small{font-size:13px} .warnt{color:var(--warn)} .okt{color:var(--ok)}
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+.wrap{max-width:1180px;margin:0 auto}
+[hidden]{display:none!important}
+
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);border-bottom:1px solid var(--line);margin:0 -16px;padding:10px 16px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+.top .wrap{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.brand .tag{font-size:12px;color:var(--ink-3)}
+.tabs{display:flex;gap:4px;margin-left:auto}
+.tabs button{border:0;background:transparent;color:var(--ink-2);padding:8px 12px;border-radius:var(--r);font-weight:700}
+.tabs button[aria-selected="true"]{background:var(--panel);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.place{display:none;padding-top:18px}
+.place.on{display:block}
+.banner{margin-bottom:14px;padding:10px 12px;border-radius:var(--r);border:1px solid var(--line);background:var(--panel);font-size:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.banner.err{border-color:var(--warn);background:var(--warn-soft)}
+
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:var(--r);padding:8px 14px;font-weight:700}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.quiet{border-color:transparent;background:transparent;color:var(--accent)}
+.btn.danger{color:var(--warn)}
+.btn.sm{padding:5px 10px;font-size:13px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.who{display:inline-flex;align-items:center;gap:6px;font-weight:700;white-space:nowrap}
+.who::before{content:"";width:10px;height:10px;border-radius:3px;background:var(--c);flex:none}
+.who.M{--c:var(--cM)} .who.F{--c:var(--cF)}
+
+/* calendar */
+.cal-grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;align-items:start}
+@media (max-width:860px){.cal-grid{grid-template-columns:1fr}}
+.today{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:18px}
+@media (max-width:700px){.today{grid-template-columns:1fr}}
+.today > div{padding:14px 16px;border-right:1px solid var(--line-2);display:flex;flex-direction:column;gap:4px;border-left:5px solid var(--edge,transparent);min-width:0}
+.today > div:last-child{border-right:0}
+@media (max-width:700px){.today > div{border-right:0;border-bottom:1px solid var(--line-2)} .today > div:last-child{border-bottom:0}}
+.today .big{font-family:var(--display);font-size:20px;font-weight:700}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg button{border:0;background:var(--panel);color:var(--ink-2);padding:6px 12px;font-weight:700}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.month-title{font-family:var(--display);font-size:20px;font-weight:700;min-width:170px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--ink-2);margin:6px 0 14px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:14px;border-radius:3px;display:inline-block}
+.sw.M{background:var(--cM-soft);border:1px solid var(--cM)} .sw.F{background:var(--cF-soft);border:1px solid var(--cF)}
+.sw.h{background:var(--holiday-soft);border:1px solid var(--holiday)} .sw.c{background:var(--change-soft);border:1px solid var(--change)}
+.sw.x{background:linear-gradient(135deg,var(--cM-soft) 50%,var(--cF-soft) 50%);border:1px solid var(--ink-3)}
+.sw.bad{border:2px solid var(--warn)} .sw.cap{border:2px dashed var(--ink-2)}
+.grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.dow{text-align:center;font-size:12px;color:var(--ink-3);font-weight:700;padding-bottom:4px}
+.day{position:relative;min-height:74px;border-radius:6px;border:1px solid var(--line);background:var(--panel);padding:5px 6px;display:flex;flex-direction:column;gap:3px;cursor:pointer;text-align:left;color:var(--ink);font:inherit}
+.day.M{background:var(--cM-soft);border-color:transparent;color:var(--cM-ink)}
+.day.F{background:var(--cF-soft);border-color:transparent;color:var(--cF-ink)}
+.day.x{background:linear-gradient(135deg,var(--a) 50%,var(--b) 50%);border-color:transparent}
+.day.pad{opacity:.35;cursor:default;background:var(--panel)}
+.day.off{background:var(--panel);color:var(--ink-3)}
+.day.today{box-shadow:0 0 0 2px var(--ink) inset}
+.day[aria-current="true"]{box-shadow:0 0 0 2px var(--accent) inset}
+.day.bad{outline:2px solid var(--warn);outline-offset:-2px}
+.day.cap{outline:2px dashed var(--ink-2);outline-offset:-2px}
+.day .n{font-weight:700;font-size:13px}
+.day .ini{position:absolute;top:5px;right:7px;font-size:11px;font-weight:700;opacity:.8}
+.day .xch{font-family:var(--mono);font-size:11px;font-weight:600;background:var(--panel);color:var(--ink);border-radius:4px;padding:1px 4px;align-self:flex-start;border:1px solid var(--line);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.day .band{font-size:11px;line-height:1.2;background:var(--holiday-soft);color:var(--ink);border-left:3px solid var(--holiday);padding:1px 4px;border-radius:2px;margin:0 -3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.day .band.c{background:var(--change-soft);border-left-color:var(--change)}
+@media (max-width:560px){.day{min-height:60px;padding:4px} .day .band{font-size:10px} .day .xch{font-size:10px} .day .ini{font-size:10px}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.panel h3{font-size:16px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:14px;margin:0}
+.kv dt{color:var(--ink-3)} .kv dd{margin:0}
+.rule{border-top:1px solid var(--line-2)}
+.notice{font-size:13px;color:var(--ink-2);background:var(--paper);border-radius:var(--r);padding:8px 10px;border:1px solid var(--line-2)}
+.notice.warn{color:var(--ink);border-color:var(--warn);background:var(--warn-soft)}
+.agenda{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.agenda .mh{padding:8px 14px;background:var(--paper);border-bottom:1px solid var(--line);border-top:1px solid var(--line)}
+.agenda .mh:first-child{border-top:0}
+.ag{display:grid;grid-template-columns:120px 64px 1fr;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line-2);align-items:baseline}
+.ag:last-child{border-bottom:0}
+.ag.past{opacity:.55}
+@media (max-width:560px){.ag{grid-template-columns:96px 56px 1fr;gap:8px;font-size:14px}}
+.year{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.mini{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;cursor:pointer;text-align:left;color:var(--ink);font:inherit}
+.mini h4{margin:0 0 6px;font-size:14px}
+.mini .g{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.mini .c{height:18px;border-radius:3px;font-size:10px;display:flex;align-items:center;justify-content:center}
+.mini .c.M{background:var(--cM-soft)} .mini .c.F{background:var(--cF-soft)} .mini .c.x{background:linear-gradient(135deg,var(--cM-soft) 50%,var(--cF-soft) 50%)}
+.mini .c.h{box-shadow:inset 0 -3px 0 var(--holiday)} .mini .c.c0{box-shadow:inset 0 -3px 0 var(--change)}
+.mini .c.pad{opacity:0}
+.pill{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:2px 8px;background:var(--paper);border:1px solid var(--line);color:var(--ink-2);white-space:nowrap}
+.pill.c{background:var(--change-soft);color:var(--change);border-color:transparent}
+.pill.h{background:var(--holiday-soft);color:var(--ink);border-color:transparent}
+.pill.w{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+
+/* settings */
+.set-grid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:860px){.set-grid{grid-template-columns:1fr}}
+.nav{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.nav button{display:grid;width:100%;text-align:left;border:0;background:transparent;color:var(--ink);padding:12px 14px;border-bottom:1px solid var(--line-2);grid-template-columns:24px 1fr;gap:10px;align-items:start}
+.nav button:last-child{border-bottom:0}
+.nav button[aria-selected="true"]{background:var(--paper);box-shadow:inset 3px 0 0 var(--accent)}
+.nav .num{font-family:var(--mono);font-size:12px;color:var(--ink-3);padding-top:3px}
+.nav .t{font-weight:700} .nav .s{font-size:13px;color:var(--ink-2)}
+.edit{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.edit .head{display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap}
+.edit .head p{max-width:62ch}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.form.four{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.form.tight{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label,.field .lbl{font-size:13px;color:var(--ink-2);font-weight:700}
+.field input,.field select,.field textarea{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-width:0;width:100%}
+.field.check{flex-direction:row;align-items:center;gap:8px}
+.field.check input{width:18px;height:18px}
+.help{font-size:13px;color:var(--ink-2)}
+.help summary{cursor:pointer;color:var(--accent);font-weight:700}
+.help ol{margin:6px 0 0 18px;padding:0}
+.list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.item{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line-2)}
+.item:last-child{border-bottom:0}
+.item .res{font-size:13px;color:var(--ink-2)}
+.item input[type=checkbox]{width:18px;height:18px}
+.item .sub{grid-column:1 / -1;display:flex;flex-direction:column;gap:12px;padding:8px 0 4px;border-top:1px dashed var(--line)}
+.item.open{background:var(--paper)}
+.preview{display:flex;flex-direction:column;gap:6px}
+.strip{display:grid;grid-template-columns:repeat(28,1fr);gap:2px}
+.strip span{height:22px;border-radius:3px;font-size:10px;display:flex;align-items:center;justify-content:center}
+.strip .M{background:var(--cM-soft)} .strip .F{background:var(--cF-soft)} .strip .x{background:linear-gradient(135deg,var(--cM-soft) 50%,var(--cF-soft) 50%)}
+.strip .h{box-shadow:inset 0 -3px 0 var(--holiday)}
+.foot{display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap;border-top:1px solid var(--line-2);padding-top:14px;align-items:center}
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th,.tbl td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line-2)}
+.tbl th{font-size:12px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em}
+.tbl td.num,.tbl th.num{text-align:right;font-variant-numeric:tabular-nums}
+.tblbox{overflow-x:auto}
+.wrows{display:flex;flex-direction:column;gap:8px}
+.wrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;align-items:end;padding:8px;border:1px solid var(--line-2);border-radius:8px}
+.swatches{display:flex;gap:6px;flex-wrap:wrap}
+.swatches button{width:28px;height:28px;border-radius:50%;border:2px solid transparent;background:var(--c)}
+.swatches button[aria-pressed="true"]{border-color:var(--ink)}
+
+/* setup */
+.setup{max-width:780px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.steps{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.steps button{font-size:11px;font-weight:700;color:var(--ink-3);padding:8px 0 0;border:0;border-top:3px solid var(--line);text-transform:uppercase;letter-spacing:.05em;background:transparent;text-align:left}
+.steps button.done{border-color:var(--accent);color:var(--ink-2)}
+.steps button.now{border-color:var(--ink);color:var(--ink)}
+@media (max-width:560px){.steps button{font-size:0;padding-top:0;height:6px}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:14px}
+.card .lead{color:var(--ink-2);max-width:62ch}
+.tpl{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.tpl button{border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:10px;text-align:left;display:flex;flex-direction:column;gap:6px;color:var(--ink)}
+.tpl button[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.tpl .bar{display:flex;gap:1px;height:8px}
+.tpl .bar i{flex:1;border-radius:1px}
+.tpl .bar i.M{background:var(--cM)} .tpl .bar i.F{background:var(--cF)}
+.tpl .nm{font-weight:700;font-size:14px} .tpl .ds{font-size:12px;color:var(--ink-2)}
+.review dl{margin:0;display:grid;grid-template-columns:160px 1fr;gap:8px 14px;font-size:14px}
+.review dt{color:var(--ink-3)} .review dd{margin:0}
+@media (max-width:560px){.review dl{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:no-preference){.day{transition:transform .08s} .day:hover{transform:translateY(-1px)}}
+@media print{.top,.toolbar,.legend,#dayPanel,.banner{display:none!important} body{padding:0;background:#fff;color:#000} .place{display:none} #place-cal{display:block} .day{break-inside:avoid}}
 </style>
 </head>
 <body>
-<div class="wrap">
-<header>
-  <h1>Custody Calendar</h1>
-  <p>Enter the rotating schedule, the exchange times, the holidays and birthdays, and the page draws every month, lists every exchange with its time, flags any stretch over the day limit, and saves the result as a calendar file.</p>
-</header>
+<header class="top"><div class="wrap">
+  <div class="brand"><h1>Custody Calendar</h1><span class="tag">runs in your browser; nothing is sent anywhere</span></div>
+  <nav class="tabs" role="tablist" aria-label="Places">
+    <button role="tab" id="tab-cal" aria-selected="true" data-go="cal">Calendar</button>
+    <button role="tab" id="tab-set" aria-selected="false" data-go="set">Settings</button>
+    <button role="tab" id="tab-setup" aria-selected="false" data-go="setup">Setup</button>
+  </nav>
+</div></header>
 
-<section class="panel controls">
-  <h2>Schedule <small>times are whole hours, local to wherever the exchange happens; press Build the calendar after any change</small></h2>
-  <div class="grid">
-    <fieldset>
-      <legend>Calendar</legend>
-      <div class="fields wide">
-        <label class="f"><span class="l">Calendar start date</span><input type="date" id="start" value="2027-01-01"></label>
-        <label class="f"><span class="l">Years to show</span><input type="number" id="years" value="2" min="1" max="10"></label>
-        <label class="f"><span class="l">Longest stretch with one parent (days)</span><input type="number" id="limit" value="21" min="1" max="90"></label>
-        <label class="f span2"><span class="l">When a holiday pushes a stretch over the limit</span>
-          <select id="mode">
-            <option value="cap">Extend the other parent's adjoining period by the excess (holiday stays whole)</option>
-            <option value="none">Do nothing, only flag it</option>
-          </select></label>
+<section class="place on wrap" id="place-cal">
+  <div id="calBanner"></div>
+  <div class="today" id="todayCard"></div>
+  <div class="cal-grid">
+    <div>
+      <div class="toolbar">
+        <button class="btn sm" data-act="prevMonth" aria-label="Previous month">&#8592;</button>
+        <span class="month-title" id="monthTitle"></span>
+        <button class="btn sm" data-act="nextMonth" aria-label="Next month">&#8594;</button>
+        <button class="btn sm quiet" data-act="goToday">Today</button>
+        <span style="flex:1"></span>
+        <div class="seg" role="group" aria-label="View">
+          <button id="v-month" aria-pressed="true" data-view="month">Month</button>
+          <button id="v-agenda" aria-pressed="false" data-view="agenda">Exchanges</button>
+          <button id="v-year" aria-pressed="false" data-view="year">Year</button>
+        </div>
       </div>
-      <p class="help">The excess under the limit rule comes from the regular time next to the holiday: from the end of the stretch where it meets the other parent's next block; if the stretch ends with a holiday, from its start; if both ends are holidays, from the end of the regular time inside it. The cycle keeps its original dates.</p>
-    </fieldset>
-
-    <fieldset>
-      <legend>Add to the schedule</legend>
-      <div class="fields wide">
-        <label class="f span2"><span class="l">Pick a schedule, holiday, birthday or custom period</span><select id="picker"></select></label>
-      </div>
-      <div class="actions" style="margin-top:.6rem">
-        <button type="button" class="primary" id="addItem">Add to the schedule</button>
-        <button type="button" id="planload">Load the parenting plan schedule</button>
-        <button type="button" id="clearAll">Remove everything</button>
-      </div>
-      <p class="help">Everything you add appears under "Your schedule" with its own settings and a Remove button. Add a regular schedule first (the long distance blocks, the same city two-week schedule, or both), then the holidays and birthdays that apply. A custom period takes any dates you type.</p>
-    </fieldset>
-  </div>
-
-  <fieldset style="margin-top:1rem">
-    <legend>Your schedule <span class="status" id="itemcount"></span></legend>
-    <p class="help" id="emptyMsg" style="margin:0 0 .6rem">Nothing added yet. Pick an item above and press "Add to the schedule", or load the parenting plan schedule.</p>
-    <div class="grid" id="schedCards"></div>
-    <div class="tablebox" id="itemsBox" style="margin-top:.9rem"><table id="items">
-      <thead><tr><th>Item</th><th>When</th><th>Goes to</th><th class="num">Days before</th><th class="num">Days after</th><th>Starts</th><th>Ends</th><th>Specific dates</th><th></th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-    <p class="help">"Days before" and "days after" widen a period around its day. The start time applies on the first day and the end time on the last day; "end of day" means midnight at the end of that day. Specific dates replace the computed dates for the years you list, written as <span class="mono">2027-11-22 10:00 to 2027-11-29 10:00</span>, several separated by semicolons. Order of priority when periods overlap: birthdays, Mother's Day and Father's Day; then Thanksgiving and Christmas; then vacation periods; then the regular schedule.</p>
-  </fieldset>
-
-  <div class="actions">
-    <button type="button" class="primary" id="run">Build the calendar</button>
-    <button type="button" id="reset">Reset to the parenting plan schedule</button>
-    <span class="status" id="saved"></span>
+      <div class="legend" id="legend"></div>
+      <div id="viewMonth"><div class="grid" id="grid"></div></div>
+      <div id="viewAgenda" hidden><div class="row" style="margin-bottom:10px"><button class="btn sm" data-act="agendaAll">Show the whole calendar</button><span class="small muted" id="agendaHint"></span></div><div class="agenda" id="agenda"></div></div>
+      <div id="viewYear" hidden><div class="year" id="year"></div></div>
+    </div>
+    <aside class="panel" id="dayPanel"></aside>
   </div>
 </section>
 
-<section class="panel" id="out">
-  <h2>Results</h2>
-  <div class="legend">
-    <span><i class="sw m"></i>Mother</span><span><i class="sw f"></i>Father</span><span><i class="sw h"></i>holiday or birthday period (bar)</span><span><i class="sw cap"></i>days moved by the limit rule</span><span><i class="sw bad"></i>stretch over the limit</span><span><u><b>12</b></u> exchange that day</span><span>a two-tone cell is an exchange day, split at the exchange time</span>
+<section class="place wrap" id="place-set">
+  <div id="setBanner"></div>
+  <div class="set-grid">
+    <nav class="nav" aria-label="Settings sections" id="setNav"></nav>
+    <div class="edit" id="setEdit"></div>
   </div>
-  <div class="tablebox" style="margin-top:.9rem"><table class="summary" id="summary"><thead><tr><th>Year</th><th>Mother days</th><th>Father days</th><th>Exchanges</th><th>Longest with Mother</th><th>Longest with Father</th><th>Over the limit</th><th>Days moved by the rule</th></tr></thead><tbody></tbody></table></div>
-  <div id="flags" style="margin-top:.9rem"></div>
-  <div id="grids"></div>
-  <h2 style="margin-top:1.25rem">Exchanges</h2>
-  <div class="actions" style="margin:0 0 .7rem">
-    <button type="button" id="ics">Save .ics calendar</button>
-    <button type="button" id="csv">Save .csv (Google Calendar import)</button>
-    <button type="button" id="copy">Copy exchange list</button>
-    <button type="button" id="print">Print</button>
-    <span class="status" id="savemsg"></span>
-  </div>
-  <div class="tablebox"><table id="exlist"><thead><tr><th>Date</th><th>Time</th><th>Child goes from</th><th>To</th><th>Why</th></tr></thead><tbody></tbody></table></div>
 </section>
 
-<footer class="site-note">Runs entirely in your browser. Nothing you enter is sent anywhere. A planning aid, not legal advice; the parenting plan controls.</footer>
-</div>
+<section class="place wrap" id="place-setup">
+  <div class="setup">
+    <div class="steps" id="stepBar"></div>
+    <div class="card" id="setupCard"></div>
+  </div>
+</section>
 
 <script>
 // ===================== Engine (no DOM) =====================
@@ -194,11 +299,12 @@ const parseDate=s=>{const m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec((s||'').trim())
 const parseHours=s=>{s=(s||'').trim(); if(s==='24:00'||s==='end')return 24; const m=/^(\d{1,2})(?::(\d{2}))?$/.exec(s); return m?Math.min(24,+m[1]):0};
 const nth=(y,m,n,wd)=>{let t=utc(y,m,1);const off=(wd-dow(t)+7)%7;return addD(t,off+7*(n-1))};
 const last=(y,m,wd)=>{let t=utc(y,m+1,0);const off=(dow(t)-wd+7)%7;return addD(t,-off)};
-const monBefore=(y,m,d)=>{let t=utc(y,m,d);const off=(dow(t)+6)%7;return addD(t,-(off===0?7:off))}; // Monday strictly before
+const monBefore=(y,m,d)=>{let t=utc(y,m,d);const off=(dow(t)+6)%7;return addD(t,-(off===0?7:off))};
+const monOnOrBefore=t=>addD(t,-((dow(t)+6)%7));
 const easter=y=>{const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1;return utc(y,mo,da)};
 const fixed=(m,d)=>y=>utc(y,m,d);
 
-// Holiday catalog. pri: 1 birthdays / Mother's Day / Father's Day, 2 Thanksgiving and Christmas, 3 vacation periods, 4 other days.
+// Holiday catalog. pri: 1 birthdays / Mother's Day / Father's Day, 2 Thanksgiving and Christmas, 3 vacation periods, 4 other days. 0 = one-time changes (strongest).
 const CAT=[
  {id:'newyear',name:"New Year's Day",region:'Both',ruleText:'January 1',rule:fixed(1,1),pri:4},
  {id:'mlk',name:'Martin Luther King Jr. Day',region:'US',ruleText:'3rd Monday of January',rule:y=>nth(y,1,3,1),pri:4},
@@ -236,15 +342,9 @@ const CAT=[
  {id:'febtime',name:"Mother's February time (same city only)",region:'Plan',ruleText:'February 1 to 14',rule:fixed(2,1),pri:3,sameCity:true,plan:{who:'M',before:0,after:13,start:'00:00',end:'24:00'}},
  {id:'maytime',name:"Mother's May time (same city only)",region:'Plan',ruleText:'May 1 to 14',rule:fixed(5,1),pri:3,sameCity:true,plan:{who:'M',before:0,after:13,start:'00:00',end:'24:00'}},
 ];
-// Parenting plan settings for the generic rows it uses.
 const PLANSET={mothers:{who:'M',before:2,after:1,start:'17:00',end:'10:00'},fathers:{who:'F',before:2,after:1,start:'17:00',end:'10:00'},thanksus:{who:'Modd',before:3,after:4,start:'10:00',end:'10:00'}};
-const BDS=[{id:'child',name:"Child's birthday",plan:{on:true,md:'',who:'Modd',before:0,after:2,start:'16:00',end:'10:00'}},
-           {id:'mother',name:"Mother's birthday",plan:{on:false,md:'',who:'M',before:0,after:1,start:'16:00',end:'10:00'}},
-           {id:'father',name:"Father's birthday",plan:{on:false,md:'',who:'F',before:0,after:1,start:'16:00',end:'10:00'}}];
 const WEEKLY_PLAN=[{week:1,parent:'F',sd:4,st:'17:00',ed:1,et:'09:00'},{week:2,parent:'F',sd:4,st:'12:00',ed:5,et:'17:00'}];
-
 function whoFor(who,y){ if(who==='M'||who==='F')return who; if(who==='Modd')return (y%2===1)?'M':'F'; return (y%2===0)?'M':'F'; }
-// Parse "YYYY-MM-DD HH:MM to YYYY-MM-DD HH:MM; ..." into [start,end] ms pairs.
 function parsePeriods(text){
   const out=[];
   for(const part of (text||'').split(/[;\n]/)){
@@ -256,7 +356,6 @@ function parsePeriods(text){
   }
   return out;
 }
-// Build the period list for one holiday-like entry in one year. cfg: {who,before,after,start,end,dates}; day = base date (ms) or null.
 function periodsFor(entry,cfg,y,day){
   const who=whoFor(cfg.who,y); const list=[];
   const ov=parsePeriods(cfg.dates).filter(([s])=>new Date(s).getUTCFullYear()===y);
@@ -268,37 +367,26 @@ function periodsFor(entry,cfg,y,day){
   list.push({s,e,who,name:entry.name,pri:entry.pri,sameCity:!!entry.sameCity});
   return list;
 }
-
-/* config = {start:'YYYY-MM-DD', years, pattern:[21,11], first:'M', xtime:'12:00', weekly:[rows], weeksPerCycle:2,
-             begins:'move'|'date'|'start'|'never', move:'YYYY-MM-DD'|null, movePre:5, ldDate:'YYYY-MM-DD'|null, weeklyOn:true, limit:21, mode:'cap'|'none',
-             holidays:{id:{on,who,before,after,start,end,dates}}, birthdays:{id:{on,md,who,before,after,start,end}}} */
 function computeSchedule(c){
-  const start=parseDate(c.start); if(start===null)throw new Error('Start date is missing');
+  const start=parseDate(c.start); if(start===null)throw new Error('The calendar start date is missing (Settings, Limits and range).');
   const y0=new Date(start).getUTCFullYear(), years=Math.max(1,Math.min(10,+c.years||1));
   const t0=start, t1=utc(y0+years,1,1); const N=Math.round((t1-t0)/HOUR);
-  const par=new Uint8Array(N); // 1 Mother, 2 Father
-  const src=new Int16Array(N); // 0 regular, >0 period index+1, -1 moved by the limit rule
+  const par=new Uint8Array(N); const src=new Int16Array(N);
   const P={M:1,F:2}, R={1:'M',2:'F'};
   const xh=parseHours(c.xtime);
-  // when the block (long distance) schedule begins
   let begins=c.begins||'start', ldStart=null, noMove=false;
   if(begins==='move'){ const m=parseDate(c.move); if(m===null){ begins='never'; noMove=true; } else ldStart=addD(m,-(+c.movePre||0))+xh*HOUR; }
-  else if(begins==='date'){ const d=parseDate(c.ldDate); if(d===null)throw new Error('Enter the long distance start date, or choose another "Begins" option.'); ldStart=d+xh*HOUR; }
+  else if(begins==='date'){ const d=parseDate(c.ldDate); if(d===null)throw new Error('Enter the date the block schedule starts (Settings, Schedule change).'); ldStart=d+xh*HOUR; }
   else if(begins==='start'){ ldStart=t0+xh*HOUR; }
   const weeklyPhase = begins==='never' || (c.weeklyOn!==false && begins!=='start' && ldStart!==null);
   const blocksAnchor = ldStart!==null?ldStart:(t0+xh*HOUR);
-  const pattern=(c.pattern||[]).map(Number).filter(n=>n>0); if(begins!=='never'&&!pattern.length)throw new Error('Block pattern needs at least one number');
+  const pattern=(c.pattern||[]).map(Number).filter(n=>n>0); if(begins!=='never'&&!pattern.length)throw new Error('The block pattern needs at least one number (Settings, Regular schedule).');
   const cycleLen=pattern.reduce((a,b)=>a+b,0)||1;
-  // pattern entries alternate Mother, Father, Mother, Father...; "first" rotates the cycle so it opens with that parent's first block
   let order=pattern.length?pattern.map((n,k)=>({p:k%2===0?1:2,n})):[{p:1,n:1}];
   if(c.first==='F'){ const k=order.findIndex(o=>o.p===2); if(k>0)order=order.slice(k).concat(order.slice(0,k)); }
-  const blockParent=(t)=>{ // which parent has hour t under the block cycle
-    let off=Math.floor((t-blocksAnchor)/DAYMS); off=((off%cycleLen)+cycleLen)%cycleLen;
-    let acc=0; for(const o of order){ acc+=o.n; if(off<acc)return o.p; }
-    return order[order.length-1].p;
-  };
+  const blockParent=(t)=>{ let off=Math.floor((t-blocksAnchor)/DAYMS); off=((off%cycleLen)+cycleLen)%cycleLen; let acc=0; for(const o of order){ acc+=o.n; if(off<acc)return o.p; } return order[order.length-1].p; };
   const wpc=Math.max(1,Math.min(4,+c.weeksPerCycle||2));
-  const anchorMon=(()=>{const off=(dow(t0)+6)%7;return addD(t0,-off)})();
+  const wa=parseDate(c.weekAnchor); const anchorMon=monOnOrBefore(wa!==null?wa:t0);
   const rows=(c.weekly||[]).map(r=>({...r,week:+r.week||1,sd:+r.sd,ed:+r.ed,sh:parseHours(r.st),eh:parseHours(r.et)}));
   const weeklyParent=(t)=>{
     const cyc=Math.floor((t-anchorMon)/(7*DAYMS*wpc)); const cycStart=anchorMon+cyc*7*DAYMS*wpc;
@@ -311,27 +399,25 @@ function computeSchedule(c){
   };
   const inWeekly=(t)=> begins==='never' || (weeklyPhase && t<ldStart);
   for(let i=0;i<N;i++){ const t=t0+i*HOUR; par[i]= inWeekly(t)?weeklyParent(t):blockParent(t); }
-  // periods
   const periods=[];
   for(let y=y0-1;y<=y0+years;y++){
     for(const h of CAT){ const cfg=c.holidays&&c.holidays[h.id]; if(!cfg||!cfg.on)continue; for(const p of periodsFor(h,cfg,y,h.rule(y)))periods.push(p); }
-    for(const b of BDS){ const cfg=c.birthdays&&c.birthdays[b.id]; if(!cfg||!cfg.on)continue; const m=/^(\d{1,2})-(\d{1,2})$/.exec((cfg.md||'').trim()); const day=m?utc(y,+m[1],+m[2]):null; for(const p of periodsFor({name:b.name,pri:1},cfg,y,day))periods.push(p); }
+    for(const [id,cfg] of Object.entries(c.birthdays||{})){ if(!cfg||!cfg.on)continue; const m=/^(\d{1,2})-(\d{1,2})$/.exec((cfg.md||'').trim()); const day=m?utc(y,+m[1],+m[2]):null; for(const p of periodsFor({name:cfg.name||'Birthday',pri:1},cfg,y,day))periods.push(p); }
   }
-  for(const cu of (c.customs||[])){ for(const [ps,pe] of parsePeriods(cu.dates)){ const y=new Date(ps).getUTCFullYear(); periods.push({s:ps,e:pe,who:whoFor(cu.who||'M',y),name:cu.name||'Custom period',pri:+cu.pri||3,sameCity:false}); } }
-  periods.sort((a,b)=>b.pri-a.pri); // low priority first, high priority painted last
+  for(const cu of (c.customs||[])){ for(const [ps,pe] of parsePeriods(cu.dates)){ const y=new Date(ps).getUTCFullYear(); periods.push({s:ps,e:pe,who:whoFor(cu.who||'M',y),name:cu.name||'Custom period',pri:(cu.pri==null||cu.pri==='')?3:+cu.pri,sameCity:false,kind:cu.kind||'custom'}); } }
+  periods.sort((a,b)=>b.pri-a.pri);
   periods.forEach((p,k)=>{p.idx=k+1;});
   for(const p of periods){
     const i0=Math.max(0,Math.ceil((p.s-t0)/HOUR)), i1=Math.min(N,Math.ceil((p.e-t0)/HOUR));
     for(let i=i0;i<i1;i++){ if(p.sameCity&&!inWeekly(t0+i*HOUR))continue; par[i]=P[p.who]; src[i]=p.idx; }
   }
-  // limit rule
   const limitH=(+c.limit||21)*24; let movedH=0;
   if(c.mode==='cap'){
     let i=0;
     while(i<N){
       const p=par[i]; const s=i; while(i<N&&par[i]===p)i++;
-      const e=i; // run [s,e) with parent p
-      if(weeklyPhase && (begins==='never' || t0+s*HOUR<ldStart))continue; // same city phase is not under the rule
+      const e=i;
+      if(weeklyPhase && (begins==='never' || t0+s*HOUR<ldStart))continue;
       let ex=e-s-limitH; if(ex<=0)continue;
       ex=Math.ceil(ex/24)*24; const other=3-p;
       const isHol=k=>src[k]>0;
@@ -341,14 +427,15 @@ function computeSchedule(c){
       j=e-1; while(ex>0&&j>=s){ if(!isHol(j)&&par[j]===p)take(j); j--; }
     }
   }
-  // segments and exchanges
   const segs=[]; { let i=0; while(i<N){const p=par[i],s=i; while(i<N&&par[i]===p)i++; segs.push({p:R[p],s:t0+s*HOUR,e:t0+i*HOUR,h:i-s});} }
   const reason=(i)=>{ const k=src[i]; if(k===-1)return 'day limit rule'; if(k>0)return periods[k-1].name; return 'regular schedule'; };
   const exchanges=[];
   for(let k=1;k<segs.length;k++){ const sg=segs[k]; const i=Math.round((sg.s-t0)/HOUR); const prev=segs[k-1];
-    let why; if(src[i]>0)why=reason(i)+' begins'; else if(src[i]===-1)why='day limit rule'; else if(src[i-1]>0)why=reason(i-1)+' ends'; else if(src[i-1]===-1)why='day limit rule'; else why=(inWeekly(sg.s)?'two-week schedule':'block cycle');
-    exchanges.push({t:sg.s,from:prev.p,to:sg.p,why}); }
-  // per-year summary
+    const pi=src[i]>0?periods[src[i]-1]:null, pp=src[i-1]>0?periods[src[i-1]-1]:null;
+    let why, kind='regular';
+    if(pp&&pp.pri===0){why=pp.name+' ends';kind='change';} else if(pi&&pi.pri===0){why=pi.name+' begins';kind='change';}
+    else if(pi){why=pi.name+' begins';kind='period';} else if(src[i]===-1){why='day limit rule';kind='limit';} else if(pp){why=pp.name+' ends';kind='period';} else if(src[i-1]===-1){why='day limit rule';kind='limit';} else why=(inWeekly(sg.s)?'same-city schedule':'regular schedule');
+    exchanges.push({t:sg.s,from:prev.p,to:sg.p,why,kind}); }
   const summary=[];
   for(let y=y0;y<y0+years;y++){
     const a=Math.max(t0,utc(y,1,1)), b=utc(y+1,1,1); const ia=Math.round((a-t0)/HOUR), ib=Math.round((b-t0)/HOUR);
@@ -360,213 +447,428 @@ function computeSchedule(c){
     summary.push({y,mDays:mh/24,fDays:fh/24,ex,lm:lm/24,lf:lf/24,over,moved:moved/24});
   }
   const over=segs.filter(sg=>sg.h>limitH);
-  // day cells
   const days={};
   for(let t=utc(y0,1,1);t<t1;t=addD(t,1)){
-    const i0=Math.round((t-t0)/HOUR); let m=0,f=0,hol=false,cap=false,first=null,firstH=0,second=null;
-    for(let k=0;k<24;k++){ const i=i0+k; if(i<0||i>=N)continue; const p=R[par[i]]; if(first===null){first=p} if(p===first&&second===null)firstH++; else if(second===null)second=p; if(p==='M')m++; else f++; if(src[i]>0)hol=true; if(src[i]===-1)cap=true; }
+    const i0=Math.round((t-t0)/HOUR); let m=0,f=0,hol=false,cap=false,first=null,firstH=0,second=null; const cnt={};
+    for(let k=0;k<24;k++){ const i=i0+k; if(i<0||i>=N)continue; const p=R[par[i]]; if(first===null){first=p} if(p===first&&second===null)firstH++; else if(second===null)second=p; if(p==='M')m++; else f++; if(src[i]>0){hol=true;cnt[src[i]]=(cnt[src[i]]||0)+1;} if(src[i]===-1)cap=true; }
     if(first===null)continue;
+    let pname=null,ppri=null,pwho=null,chg=null; let best=0; for(const [k,v] of Object.entries(cnt)){ const p=periods[+k-1]; if(p.pri===0)chg=p.name; if(v>best&&p.pri>0){best=v; pname=p.name; ppri=p.pri; pwho=p.who;} }
+    if(!pname&&chg){pname=chg;ppri=0;}
     const bad=over.some(sg=>sg.s<t+DAYMS&&sg.e>t);
     const ex=exchanges.some(x=>x.t>=t&&x.t<t+DAYMS);
-    days[ymd(t)]={first,second,firstH,m,f,hol,cap,bad,ex};
+    days[ymd(t)]={first,second,firstH,m,f,hol,cap,bad,ex,pname,ppri,pwho,chg};
   }
   return {t0,t1,y0,years,segs,exchanges,summary,over,days,periods,limitH,movedH,ldStart:(weeklyPhase&&begins!=='never')?ldStart:null,weeklyPhase,begins,noMove};
 }
-if(typeof module!=='undefined'){module.exports={computeSchedule,CAT,BDS,PLANSET,WEEKLY_PLAN,parsePeriods,easter,nth,last,monBefore,ymd,hm};}
-</script>
 
-<script>
-// ===================== UI =====================
+// ===================== App =====================
 const $=id=>document.getElementById(id);
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const WHO=[['M','Mother'],['F','Father'],['Modd','Mother odd years / Father even'],['Meven','Mother even years / Father odd']];
-const PN={M:'Mother',F:'Father'};
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
-const PRESETS={'ld':{pattern:'21,11',first:'F',xtime:'12:00'},'7-7':{pattern:'7,7',first:'M',xtime:'17:00'},'2-2-3':{pattern:'2,2,3,2,2,3',first:'M',xtime:'17:00'},'2-2-5-5':{pattern:'2,2,5,5',first:'M',xtime:'17:00'},'3-4-4-3':{pattern:'3,4,4,3',first:'M',xtime:'17:00'},'5-2':{pattern:'5,2',first:'M',xtime:'17:00'}};
-const PRESET_LABELS={'ld':'21 days with Mother, 11 with Father','7-7':'Alternating weeks: 7 and 7','2-2-3':'2-2-3 (two-week cycle)','2-2-5-5':'2-2-5-5 (two-week cycle)','3-4-4-3':'3-4-4-3 (two-week cycle)','5-2':'Every weekend: 5 and 2','custom':'Custom pattern'};
-
-// ----- state: the list of things added to the schedule -----
-let ITEMS=[];
-const newLd=()=>({kind:'ld',preset:'ld',pattern:'21,11',first:'F',xtime:'12:00',begins:'move',move:'',movePre:5,ldDate:''});
-const newWeekly=()=>({kind:'weekly',rows:WEEKLY_PLAN.map(r=>({...r}))});
-function newHoliday(id){ const h=CAT.find(x=>x.id===id); const d=h.plan?{...h.plan}:{who:'Modd',before:0,after:0,start:'00:00',end:'24:00'}; const p=PLANSET[id]; return {kind:'holiday',id,...d,...(p||{}),dates:''}; }
-function newBirthday(id){ const b=BDS.find(x=>x.id===id); return {kind:'birthday',id,...b.plan}; }
-const newCustom=()=>({kind:'custom',name:'Custom period',who:'M',dates:'',pri:3});
-function planItems(){
-  return [newLd(),newWeekly(),...['mothers','fathers','thanksus','prexmas','xmasper','nyper','febtime','maytime'].map(newHoliday),newBirthday('child')];
-}
-function buildPicker(){
-  const groups=[['Regular schedules',[['ld','Long distance schedule (blocks, e.g. 21/11)'],['weekly','Same city schedule (two-week, Week A / Week B)']]],
-    ['Holidays - United States',CAT.filter(h=>h.region==='US').map(h=>['h:'+h.id,h.name])],
-    ['Holidays - Canada',CAT.filter(h=>h.region==='Canada').map(h=>['h:'+h.id,h.name])],
-    ['Holidays - United States and Canada',CAT.filter(h=>h.region==='Both').map(h=>['h:'+h.id,h.name])],
-    ['Parenting plan periods',CAT.filter(h=>h.region==='Plan').map(h=>['h:'+h.id,h.name+' ('+h.ruleText+')'])],
-    ['Birthdays',BDS.map(b=>['b:'+b.id,b.name])],
-    ['Other',[['custom','Custom period (dates you type)']]]];
-  $('picker').innerHTML=groups.map(([g,opts])=>`<optgroup label="${esc(g)}">${opts.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join('')}</optgroup>`).join('');
-}
-function addFromPicker(){
-  const v=$('picker').value; let item=null, key=null;
-  if(v==='ld'){item=newLd();key=i=>i.kind==='ld'}
-  else if(v==='weekly'){item=newWeekly();key=i=>i.kind==='weekly'}
-  else if(v==='custom'){item=newCustom()}
-  else if(v.startsWith('h:')){const id=v.slice(2);item=newHoliday(id);key=i=>i.kind==='holiday'&&i.id===id}
-  else if(v.startsWith('b:')){const id=v.slice(2);item=newBirthday(id);key=i=>i.kind==='birthday'&&i.id===id}
-  if(key&&ITEMS.some(key)){ $('saved').textContent='Already in your schedule.'; return; }
-  ITEMS.push(item); renderItems(); $('saved').textContent='Added. Press "Build the calendar" to see it.';
-}
-// ----- rendering "Your schedule" -----
-const whoSel=(i,val)=>`<select data-i="${i}" data-k="who">${WHO.map(([v,l])=>`<option value="${v}"${v===val?' selected':''}>${l}</option>`).join('')}</select>`;
-const timeIn=(i,k,val)=>`<input type="time" data-i="${i}" data-k="${k}" value="${val}" step="3600">`;
-const endIn=(i,val)=>{const eod=val==='24:00';return `<span style="display:inline-flex;gap:.3rem;align-items:center"><input type="time" data-i="${i}" data-k="end" value="${eod?'00:00':val}" step="3600"${eod?' disabled':''}><label class="check" style="font-size:.85rem"><input type="checkbox" data-i="${i}" data-k="eod"${eod?' checked':''}> end of day</label></span>`};
-const numIn=(i,k,val)=>`<input type="number" data-i="${i}" data-k="${k}" value="${val}" min="0" max="60">`;
-const daySel=(i,r,k,val)=>`<select data-i="${i}" data-r="${r}" data-k="${k}">${DOWN.map((d,n)=>`<option value="${n}"${n===val?' selected':''}>${d}</option>`).join('')}</select>`;
-function renderItems(){
-  const cards=[], rows=[];
-  ITEMS.forEach((it,i)=>{
-    if(it.kind==='ld'){
-      cards.push(`<fieldset class="card"><legend>Long distance schedule (blocks)</legend><button type="button" class="small rm" data-i="${i}" data-k="remove">Remove</button>
-        <div class="fields wide">
-          <label class="f span2"><span class="l">Block pattern</span><select data-i="${i}" data-k="preset">${Object.entries(PRESET_LABELS).map(([v,l])=>`<option value="${v}"${v===it.preset?' selected':''}>${l}</option>`).join('')}</select></label>
-          <label class="f"><span class="l">Days: Mother, Father, Mother, ...</span><input type="text" class="md" style="width:9rem" data-i="${i}" data-k="pattern" value="${esc(it.pattern)}"></label>
-          <label class="f"><span class="l">Cycle starts with</span><select data-i="${i}" data-k="first"><option value="M"${it.first==='M'?' selected':''}>Mother</option><option value="F"${it.first==='F'?' selected':''}>Father</option></select></label>
-          <label class="f"><span class="l">Exchange time</span>${timeIn(i,'xtime',it.xtime)}</label>
-          <label class="f"><span class="l">Begins</span><select data-i="${i}" data-k="begins">${[['move','Before the move date'],['date','On a date'],['start','At the calendar start']].map(([v,l])=>`<option value="${v}"${v===it.begins?' selected':''}>${l}</option>`).join('')}</select></label>
-          ${it.begins==='move'?`<label class="f"><span class="l">Moving parent's move date</span><input type="date" data-i="${i}" data-k="move" value="${esc(it.move||'')}"></label><label class="f"><span class="l">Days before the move</span>${numIn(i,'movePre',it.movePre)}</label>`:''}
-          ${it.begins==='date'?`<label class="f"><span class="l">Long distance start date</span><input type="date" data-i="${i}" data-k="ldDate" value="${esc(it.ldDate||'')}"></label>`:''}
-        </div>
-        <p class="help">The first block starts at the exchange time on the day the schedule begins, with the parent in "Cycle starts with". The pattern lists days in turn: Mother, Father, Mother, Father. ${it.begins==='move'?'Until it begins, the same city schedule applies if it is in your schedule.':''}</p></fieldset>`);
-    } else if(it.kind==='weekly'){
-      cards.push(`<fieldset class="card"><legend>Same city schedule (two-week)</legend><button type="button" class="small rm" data-i="${i}" data-k="remove">Remove</button>
-        <p class="help" style="margin:0 0 .6rem">Applies from the calendar start until the long distance schedule begins. Week 1 starts on the Monday on or before the calendar start date. Each row gives one parent a period; the other parent has all the time not listed.</p>
-        <div class="tablebox"><table><thead><tr><th>Week</th><th>Parent</th><th>From</th><th></th><th>To</th><th></th><th></th></tr></thead><tbody>
-        ${it.rows.map((r,ri)=>`<tr><td><select data-i="${i}" data-r="${ri}" data-k="week"><option value="1"${r.week===1?' selected':''}>Week 1 (A)</option><option value="2"${r.week===2?' selected':''}>Week 2 (B)</option></select></td><td><select data-i="${i}" data-r="${ri}" data-k="parent"><option value="F"${r.parent==='F'?' selected':''}>Father</option><option value="M"${r.parent==='M'?' selected':''}>Mother</option></select></td><td>${daySel(i,ri,'sd',r.sd)}</td><td><input type="time" data-i="${i}" data-r="${ri}" data-k="st" value="${r.st}" step="3600"></td><td>${daySel(i,ri,'ed',r.ed)}</td><td><input type="time" data-i="${i}" data-r="${ri}" data-k="et" value="${r.et}" step="3600"></td><td><button type="button" class="small" data-i="${i}" data-r="${ri}" data-k="delrow">Remove</button></td></tr>`).join('')}
-        </tbody></table></div><div class="actions"><button type="button" class="small" data-i="${i}" data-k="addrow">Add a period</button></div></fieldset>`);
-    } else if(it.kind==='holiday'){
-      const h=CAT.find(x=>x.id===it.id);
-      rows.push(`<tr><td>${esc(h.name)}</td><td class="status">${esc(h.ruleText)}${h.sameCity?' (same city only)':''}</td><td>${whoSel(i,it.who)}</td><td class="num">${numIn(i,'before',it.before)}</td><td class="num">${numIn(i,'after',it.after)}</td><td>${timeIn(i,'start',it.start)}</td><td>${endIn(i,it.end)}</td><td><input type="text" class="dates" data-i="${i}" data-k="dates" value="${esc(it.dates||'')}" placeholder="2027-11-22 10:00 to 2027-11-29 10:00; ..."></td><td><button type="button" class="small" data-i="${i}" data-k="remove">Remove</button></td></tr>`);
-    } else if(it.kind==='birthday'){
-      const b=BDS.find(x=>x.id===it.id);
-      rows.push(`<tr><td>${esc(b.name)}</td><td><input type="text" class="md" data-i="${i}" data-k="md" value="${esc(it.md||'')}" placeholder="MM-DD"></td><td>${whoSel(i,it.who)}</td><td class="num">${numIn(i,'before',it.before)}</td><td class="num">${numIn(i,'after',it.after)}</td><td>${timeIn(i,'start',it.start)}</td><td>${endIn(i,it.end)}</td><td class="status">type the date as month-day</td><td><button type="button" class="small" data-i="${i}" data-k="remove">Remove</button></td></tr>`);
-    } else if(it.kind==='custom'){
-      rows.push(`<tr><td><input type="text" class="name" data-i="${i}" data-k="name" value="${esc(it.name)}"></td><td class="status">dates at right</td><td>${whoSel(i,it.who)}</td><td class="num status" colspan="4">times are part of the dates</td><td><input type="text" class="dates" data-i="${i}" data-k="dates" value="${esc(it.dates||'')}" placeholder="2027-07-01 10:00 to 2027-07-15 10:00; ..."></td><td><button type="button" class="small" data-i="${i}" data-k="remove">Remove</button></td></tr>`);
-    }
-  });
-  $('schedCards').innerHTML=cards.join('');
-  $('items').querySelector('tbody').innerHTML=rows.join('');
-  $('itemsBox').style.display=rows.length?'':'none';
-  $('emptyMsg').style.display=ITEMS.length?'none':'';
-  const n=ITEMS.length; $('itemcount').textContent=n?`${n} item${n>1?'s':''}`:'';
-}
-function onItemChange(e){
-  const t=e.target; if(!t.dataset||t.dataset.i===undefined)return;
-  const it=ITEMS[+t.dataset.i]; const k=t.dataset.k; if(!it)return;
-  if(t.dataset.r!==undefined){ const r=it.rows[+t.dataset.r]; if(k==='week'||k==='sd'||k==='ed')r[k]=+t.value; else r[k]=t.value; return; }
-  if(k==='eod'){ it.end=t.checked?'24:00':'00:00'; renderItems(); return; }
-  if(k==='end'){ it.end=t.value||'00:00'; return; }
-  if(k==='preset'){ it.preset=t.value; const p=PRESETS[t.value]; if(p){it.pattern=p.pattern;it.first=p.first;it.xtime=p.xtime;} renderItems(); return; }
-  if(k==='begins'){ it.begins=t.value; renderItems(); return; }
-  if(k==='before'||k==='after'||k==='movePre'){ it[k]=+t.value||0; return; }
-  it[k]=t.value;
-}
-function onItemClick(e){
-  const t=e.target.closest('button'); if(!t||t.dataset.i===undefined)return;
-  const i=+t.dataset.i, it=ITEMS[i], k=t.dataset.k;
-  if(k==='remove'){ ITEMS.splice(i,1); renderItems(); }
-  else if(k==='addrow'){ it.rows.push({week:1,parent:'F',sd:5,st:'17:00',ed:0,et:'17:00'}); renderItems(); }
-  else if(k==='delrow'){ it.rows.splice(+t.dataset.r,1); renderItems(); }
-}
-// ----- config in and out -----
-function readConfig(){
-  const ld=ITEMS.find(i=>i.kind==='ld'), wk=ITEMS.find(i=>i.kind==='weekly');
-  const holidays={}; ITEMS.filter(i=>i.kind==='holiday').forEach(i=>{holidays[i.id]={on:true,who:i.who,before:i.before,after:i.after,start:i.start||'00:00',end:i.end||'24:00',dates:i.dates};});
-  const birthdays={}; ITEMS.filter(i=>i.kind==='birthday').forEach(i=>{birthdays[i.id]={on:true,md:(i.md||'').trim(),who:i.who,before:i.before,after:i.after,start:i.start||'00:00',end:i.end||'24:00'};});
-  const customs=ITEMS.filter(i=>i.kind==='custom').map(i=>({name:i.name,who:i.who,dates:i.dates,pri:i.pri}));
-  return {start:$('start').value,years:+$('years').value||1,limit:+$('limit').value||21,mode:$('mode').value,
-          pattern:ld?String(ld.pattern).split(/[,\s/-]+/).filter(Boolean):[],first:ld?ld.first:'M',xtime:ld?ld.xtime||'12:00':'12:00',
-          begins:ld?ld.begins:'never',move:ld?ld.move||null:null,movePre:ld?+ld.movePre||0:0,ldDate:ld?ld.ldDate||null:null,
-          weeklyOn:!!wk,weekly:wk?wk.rows:[],weeksPerCycle:2,holidays,birthdays,customs};
-}
-function calDefaults(){ $('start').value='2027-01-01'; $('years').value=2; $('limit').value=21; $('mode').value='cap'; }
-function saveState(){ try{localStorage.setItem('cc4',JSON.stringify({cal:{start:$('start').value,years:$('years').value,limit:$('limit').value,mode:$('mode').value},items:ITEMS}));}catch(e){} }
-function loadState(){ try{const s=JSON.parse(localStorage.getItem('cc4')||'null'); if(!s||!Array.isArray(s.items))return false; $('start').value=s.cal.start||'2027-01-01'; $('years').value=s.cal.years||2; $('limit').value=s.cal.limit||21; $('mode').value=s.cal.mode||'cap'; ITEMS=s.items; return true;}catch(e){return false} }
-
-let RESULT=null;
+const MONS=MON.map(m=>m.slice(0,3));
+const COLORS=['blue','orange','green','purple','teal','pink'];
+const PRESETS={'ld':{pattern:'21,11',first:'F',xtime:'12:00',nm:'Long-distance blocks',ds:'21 / 11 days',bar:'MMMMMMMFFFF'},'7-7':{pattern:'7,7',first:'M',xtime:'17:00',nm:'Week on, week off',ds:'7 / 7',bar:'MMMMMMMFFFFFFF'},'2-2-3':{pattern:'2,2,3,2,2,3',first:'M',xtime:'17:00',nm:'2-2-3',ds:'two-week repeat',bar:'MMFFMMMFFMMFFF'},'2-2-5-5':{pattern:'2,2,5,5',first:'M',xtime:'17:00',nm:'2-2-5-5',ds:'two-week repeat',bar:'MMFFMMMMMFFFFF'},'3-4-4-3':{pattern:'3,4,4,3',first:'M',xtime:'17:00',nm:'3-4-4-3',ds:'two-week repeat',bar:'MMMFFFFFFFFMMM'},'5-2':{pattern:'5,2',first:'M',xtime:'17:00',nm:'Every weekend',ds:'5 / 2',bar:'MMMMMFF'},'custom':{nm:'Custom',ds:'type the days',bar:'MMMMFF'}};
+const uid=()=>Math.random().toString(36).slice(2,9);
 const fmt1=n=>(Math.round(n*10)/10).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:1});
-function render(r,c){
-  const tb=$('summary').querySelector('tbody');
-  tb.innerHTML=r.summary.map(s=>`<tr><td>${s.y}</td><td class="num">${fmt1(s.mDays)}</td><td class="num">${fmt1(s.fDays)}</td><td class="num">${s.ex}</td><td class="num">${fmt1(s.lm)}</td><td class="num">${fmt1(s.lf)}</td><td class="num ${s.over.length?'flag':'ok'}">${s.over.length?s.over.length+' stretch'+(s.over.length>1?'es':''):'none'}</td><td class="num">${fmt1(s.moved)}</td></tr>`).join('');
-  const fl=$('flags');
-  if(r.over.length){ fl.innerHTML=`<p class="flag" style="margin:0">${r.over.length} stretch${r.over.length>1?'es':''} over ${c.limit} days:</p><ul class="flags">`+r.over.map(sg=>`<li><span class="mono">${ymd(sg.s)} ${hm(sg.s)}</span> to <span class="mono">${ymd(sg.e)} ${hm(sg.e)}</span>: ${fmt1(sg.h/24)} days with ${PN[sg.p]}</li>`).join('')+'</ul>'; }
-  else fl.innerHTML=`<p class="ok" style="margin:0">No stretch over ${c.limit} days.</p>`;
-  if(r.ldStart!==null) fl.innerHTML+=`<p class="help">Long distance schedule begins <span class="mono">${ymd(r.ldStart)} ${hm(r.ldStart)}</span>. The same city schedule applies before that.</p>`;
-  else if(r.noMove) fl.innerHTML+=`<p class="help">No move date entered yet, so this shows the same city schedule only. Enter the move date on the long distance card to add the blocks from five days before it.</p>`;
-  else if(r.begins==='never'&&c.weeklyOn) fl.innerHTML+=`<p class="help">Same city schedule only.</p>`;
-  else if(r.begins==='never'&&!c.weeklyOn) fl.innerHTML+=`<p class="flag">No regular schedule in your schedule. Add the long distance blocks or the same city schedule.</p>`;
-  let html='';
-  for(let y=r.y0;y<r.y0+r.years;y++){
-    html+=`<div class="year"><h3>${y}</h3><div class="months">`;
-    for(let m=1;m<=12;m++){
-      const first=utc(y,m,1), nd=new Date(utc(y,m+1,0)).getUTCDate(); const lead=(dow(first)+6)%7;
-      html+=`<div class="month"><h4>${MON[m-1]}</h4><div class="days">${['Mo','Tu','We','Th','Fr','Sa','Su'].map(d=>`<span class="dow">${d}</span>`).join('')}`;
-      for(let k=0;k<lead;k++)html+='<span class="day blank"></span>';
-      for(let d=1;d<=nd;d++){ const key=ymd(utc(y,m,d)); const info=r.days[key];
-        if(!info){html+=`<span class="day">${d}</span>`;continue;}
-        const cls=['day']; let style='';
-        if(info.second){ const pct=Math.round(info.firstH/24*100); const a=`var(--${info.first==='M'?'mother':'father'}-soft)`, b=`var(--${info.second==='M'?'mother':'father'}-soft)`; style=` style="background:linear-gradient(90deg,${a} ${pct}%,${b} ${pct}%)"`; }
-        else cls.push(info.first==='M'?'m':'f');
-        if(info.hol)cls.push('hol'); if(info.cap)cls.push('cap'); if(info.bad)cls.push('bad'); if(info.ex)cls.push('ex');
-        const title=`${key}: ${info.m}h Mother, ${info.f}h Father${info.hol?', holiday period':''}${info.cap?', moved by the limit rule':''}`;
-        html+=`<span class="${cls.join(' ')}"${style} title="${title}">${d}</span>`; }
-      html+='</div></div>';
+const fD=t=>{const d=new Date(t);return `${DOWN[d.getUTCDay()]} ${MONS[d.getUTCMonth()]} ${d.getUTCDate()}`};
+const fDY=t=>{const d=new Date(t);return `${DOWN[d.getUTCDay()]} ${MONS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`};
+const fDL=t=>{const d=new Date(t);return `${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getUTCDay()]}, ${MON[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`};
+const fDT=t=>`${fD(t)} ${hm(t)}`;
+const nowT=()=>{const d=new Date();return utc(d.getFullYear(),d.getMonth()+1,d.getDate(),d.getHours())};
+const todayT=()=>{const d=new Date();return utc(d.getFullYear(),d.getMonth()+1,d.getDate())};
+const PN=code=>STATE.parents[code].name;
+const PI=code=>(STATE.parents[code].name||code).trim().slice(0,1).toUpperCase();
+const whoText=w=>w==='M'?PN('M'):w==='F'?PN('F'):w==='Modd'?`${PN('M')} odd years, ${PN('F')} even`:`${PN('M')} even years, ${PN('F')} odd`;
+const WHO_OPTS=()=>[['M',PN('M')],['F',PN('F')],['Modd',`${PN('M')} odd years / ${PN('F')} even`],['Meven',`${PN('M')} even years / ${PN('F')} odd`]];
+
+// ----- state -----
+function planDefaults(){
+  const d=new Date(); const startYm=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+  const holidays={}; for(const id of ['mothers','fathers','thanksus','prexmas','xmasper','nyper','febtime','maytime']){ const h=CAT.find(x=>x.id===id); holidays[id]={on:true,...(h.plan||{who:'Modd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[id]||{}),dates:''}; }
+  return {v:5,setupDone:false,
+    parents:{M:{name:'Mother',color:'blue'},F:{name:'Father',color:'orange'}},
+    children:[{id:'child',name:'',md:'',who:'Modd',before:0,after:2,start:'16:00',end:'10:00',on:true}],
+    pbd:{M:{on:false,md:'',before:0,after:1,start:'16:00',end:'10:00'},F:{on:false,md:'',before:0,after:1,start:'16:00',end:'10:00'}},
+    regular:{on:true,preset:'ld',pattern:'21,11',first:'F',xtime:'12:00',place:''},
+    phase:{begins:'move',move:'',movePre:5,ldDate:'',weeklyOn:true,weekAnchor:'2026-12-28',weekly:{rows:WEEKLY_PLAN.map(r=>({...r})),place:''}},
+    holidays, customs:[],
+    vacations:{allow:{M:14,F:14},notice:30,maxLen:14,list:[]},
+    changes:[],
+    cal:{start:startYm,years:3,limit:21,mode:'cap'}};
+}
+function migrateOld(){
+  try{ const s=JSON.parse(localStorage.getItem('cc4')||'null'); if(!s||!Array.isArray(s.items))return null;
+    const st=planDefaults(); st.setupDone=true; st.holidays={}; st.children=[];
+    st.cal={start:s.cal.start||st.cal.start,years:+s.cal.years||3,limit:+s.cal.limit||21,mode:s.cal.mode||'cap'};
+    st.phase.weekAnchor=s.cal.start||st.phase.weekAnchor; st.regular.on=false; st.phase.weeklyOn=false;
+    for(const it of s.items){
+      if(it.kind==='ld'){ st.regular={on:true,preset:it.preset||'custom',pattern:it.pattern,first:it.first,xtime:it.xtime,place:''}; st.phase.begins=it.begins||'move'; st.phase.move=it.move||''; st.phase.movePre=+it.movePre||0; st.phase.ldDate=it.ldDate||''; }
+      else if(it.kind==='weekly'){ st.phase.weeklyOn=true; st.phase.weekly.rows=(it.rows||[]).map(r=>({...r})); }
+      else if(it.kind==='holiday'){ st.holidays[it.id]={on:true,who:it.who,before:+it.before||0,after:+it.after||0,start:it.start||'00:00',end:it.end||'24:00',dates:it.dates||''}; }
+      else if(it.kind==='birthday'){ if(it.id==='child')st.children.push({id:'child',name:'',md:it.md||'',who:it.who,before:+it.before||0,after:+it.after||0,start:it.start||'00:00',end:it.end||'24:00',on:true}); else { const k=it.id==='mother'?'M':'F'; st.pbd[k]={on:true,md:it.md||'',before:+it.before||0,after:+it.after||0,start:it.start||'00:00',end:it.end||'24:00'}; } }
+      else if(it.kind==='custom'){ st.customs.push({name:it.name,who:it.who,dates:it.dates,pri:+it.pri||3}); }
     }
-    html+='</div></div>';
+    if(!st.children.length)st.children=planDefaults().children.map(c=>({...c,on:false}));
+    return st; }catch(e){return null}
+}
+let STATE=null;
+function loadState(){
+  const h=location.hash; if(h.startsWith('#s=')){ try{ const j=JSON.parse(decodeURIComponent(escape(atob(h.slice(3).replace(/-/g,'+').replace(/_/g,'/'))))); if(j&&j.v===5){ STATE=j; STATE.setupDone=true; history.replaceState(null,'',location.pathname+location.search); saveState(); UI.note='Shared settings loaded and saved in this browser.'; return; } }catch(e){} }
+  try{ const s=JSON.parse(localStorage.getItem('cc5')||'null'); if(s&&s.v===5){STATE=s;return;} }catch(e){}
+  const m=migrateOld(); if(m){STATE=m; UI.note='Your earlier settings were carried over.'; saveState(); return;}
+  STATE=planDefaults();
+}
+function saveState(){ try{localStorage.setItem('cc5',JSON.stringify(STATE));}catch(e){} }
+function shareLink(){ const s=btoa(unescape(encodeURIComponent(JSON.stringify(STATE)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); return location.origin+location.pathname+'#s='+s; }
+
+// ----- config for the engine -----
+function toConfig(withChanges){
+  const S=STATE; const birthdays={};
+  S.children.forEach((c,i)=>{ birthdays['child'+i]={on:!!c.on&&!!(c.md||'').trim(),name:(c.name?c.name+"'s":"Child's")+' birthday',md:c.md,who:c.who,before:c.before,after:c.after,start:c.start,end:c.end}; });
+  for(const k of ['M','F']){ const b=S.pbd[k]; birthdays['p'+k]={on:!!b.on&&!!(b.md||'').trim(),name:PN(k)+"'s birthday",md:b.md,who:k,before:b.before,after:b.after,start:b.start,end:b.end}; }
+  const customs=S.customs.map(c=>({...c,kind:'custom'}));
+  for(const v of S.vacations.list){ if(!v.s||!v.e)continue; customs.push({name:v.note?`${PN(v.who)}'s vacation: ${v.note}`:`${PN(v.who)}'s vacation`,who:v.who,dates:`${v.s} ${v.sh||'10:00'} to ${v.e} ${v.eh||'10:00'}`,pri:3,kind:'vacation'}); }
+  if(withChanges) for(const ch of S.changes){ const p=changePeriod(ch); if(p) customs.push({name:ch.note||'One-time change',who:p.who,dates:`${ymd(p.s)} ${hm(p.s)} to ${ymd(p.e)} ${hm(p.e)}`,pri:0,kind:'change'}); }
+  const holidays={}; for(const [id,h] of Object.entries(S.holidays)) if(h.on) holidays[id]={...h,on:true};
+  const begins=S.regular.on?S.phase.begins:'never';
+  return {start:S.cal.start,years:S.cal.years,limit:S.cal.limit,mode:S.cal.mode,
+    pattern:String(S.regular.pattern||'').split(/[,\s/-]+/).filter(Boolean),first:S.regular.first,xtime:S.regular.xtime||'12:00',
+    begins,move:S.phase.move||null,movePre:+S.phase.movePre||0,ldDate:S.phase.ldDate||null,weeklyOn:!!S.phase.weeklyOn,weekly:S.phase.weekly.rows,weeksPerCycle:2,weekAnchor:S.phase.weekAnchor,
+    holidays,birthdays,customs};
+}
+// A one-time change becomes a short period with priority 0. 'move': an exchange at old date/time happens at a new date/time instead. 'give': a period goes to one parent.
+function changePeriod(ch){
+  if(ch.kind==='give'){ const s=parseDate(ch.s), e=parseDate(ch.e); if(s===null||e===null)return null; const S=s+parseHours(ch.sh)*HOUR, E=e+parseHours(ch.eh)*HOUR; return E>S?{s:S,e:E,who:ch.who}:null; }
+  const od=parseDate(ch.date), nd=parseDate(ch.newDate||ch.date); if(od===null||nd===null)return null;
+  const o=od+parseHours(ch.time)*HOUR, n=nd+parseHours(ch.newTime)*HOUR; if(o===n)return null;
+  const x=BASE&&BASE.exchanges.find(x=>x.t===o); if(!x)return null;
+  return n>o?{s:o,e:n,who:x.from}:{s:n,e:o,who:x.to};
+}
+let BASE=null, RESULT=null, ERR=null;
+function rebuild(){
+  ERR=null;
+  try{ BASE=computeSchedule(toConfig(false)); RESULT=computeSchedule(toConfig(true)); }
+  catch(e){ ERR=e.message; if(!RESULT)RESULT=null; }
+  saveState(); applyColors();
+}
+function applyColors(){ document.documentElement.dataset.cm=STATE.parents.M.color; document.documentElement.dataset.cf=STATE.parents.F.color; }
+
+// ----- generic binding: inputs with data-b="path" write into STATE -----
+function getPath(p){ return p.split('.').reduce((o,k)=>o==null?undefined:o[k],STATE); }
+function setPath(p,v){ const ks=p.split('.'); let o=STATE; for(let i=0;i<ks.length-1;i++){ if(o[ks[i]]==null)o[ks[i]]={}; o=o[ks[i]]; } o[ks[ks.length-1]]=v; }
+function bindInput(t){
+  const p=t.dataset.b; if(!p)return false; const ty=t.dataset.t||'str'; let v;
+  if(ty==='num')v=+t.value||0; else if(ty==='bool')v=!!t.checked; else if(ty==='eod'){ v=t.checked?'24:00':'10:00'; } else v=t.value;
+  setPath(p,v); return true;
+}
+const UI={place:'cal',view:'month',cur:null,sel:null,section:'people',step:1,openHol:null,openVac:null,openChg:null,agendaAll:false,note:''};
+
+// ----- helpers for display -----
+function periodText(entry,cfg,y){ const list=periodsFor(entry,cfg,y,entry.rule?entry.rule(y):entry.day(y)); if(!list.length)return `${y}: no dates`; return list.map(p=>`${y}: ${fD(p.s)} ${hm(p.s)} to ${fD(p.e)} ${hm(p.e)}, ${PN(p.who)}`).join('; '); }
+function holRowText(h,cfg){ const Y=new Date().getFullYear(); return [Y,Y+1].map(y=>periodText(h,cfg,y)).join(' · '); }
+function childText(c){ const m=/^(\d{1,2})-(\d{1,2})$/.exec((c.md||'').trim()); if(!m)return 'no birthday entered'; const Y=new Date().getFullYear(); const entry={name:'b',pri:1,day:y=>utc(y,+m[1],+m[2])}; return [Y,Y+1].map(y=>periodText(entry,c,y)).join(' · '); }
+function regularText(){ const r=STATE.regular; if(!r.on)return 'off'; const pat=String(r.pattern).split(/[,\s/-]+/).filter(Boolean); const parts=[]; pat.forEach((n,k)=>{ const who=(k%2===0)?'M':'F'; parts.push(`${n} with ${PN(who)}`); }); let s=parts.join(', '); if(r.first==='F')s+=` (starts with ${PN('F')})`; return `${s}, exchanges at ${r.xtime}`; }
+function phaseText(){ const p=STATE.phase; if(!STATE.regular.on)return p.weeklyOn?'Same-city schedule only':'No regular schedule'; if(p.begins==='start')return 'Blocks from the calendar start'; if(p.begins==='date')return p.ldDate?`Blocks from ${fDY(parseDate(p.ldDate))}`:'Block start date missing'; if(!p.move)return 'Move date not entered: same-city schedule shows'; return `Same city until ${p.movePre} days before the move (${fDY(parseDate(p.move))}), then blocks`; }
+function vacUsed(who,y){ let n=0; for(const v of STATE.vacations.list){ if(v.who!==who||!v.s||!v.e)continue; const s=parseDate(v.s); if(s===null||new Date(s).getUTCFullYear()!==y)continue; const e=parseDate(v.e); n+=Math.max(0,(e+parseHours(v.eh)*HOUR-s-parseHours(v.sh)*HOUR)/DAYMS); } return n; }
+function vacWarnings(v){ const w=[]; const s=parseDate(v.s), e=parseDate(v.e); if(s===null||e===null)return ['Enter a first and a last day.']; const S=s+parseHours(v.sh)*HOUR, E=e+parseHours(v.eh)*HOUR; if(E<=S)return ['The end is before the start.'];
+  const len=(E-S)/DAYMS; const A=STATE.vacations; if(A.maxLen&&len>A.maxLen)w.push(`${fmt1(len)} days is longer than the ${A.maxLen}-day limit for one vacation.`);
+  const y=new Date(S).getUTCFullYear(); const used=vacUsed(v.who,y); if(A.allow[v.who]&&used>A.allow[v.who])w.push(`${PN(v.who)} would use ${fmt1(used)} of ${A.allow[v.who]} vacation days in ${y}.`);
+  const lead=(S-todayT())/DAYMS; if(S>todayT()&&A.notice&&lead<A.notice)w.push(`Starts in ${Math.floor(lead)} days; the plan asks for ${A.notice} days notice.`);
+  if(BASE){ const hits=BASE.periods.filter(p=>p.pri>=1&&p.pri<=2&&p.who!==v.who&&p.s<E&&p.e>S); for(const h of hits)w.push(`Overlaps ${h.name} (${PN(h.who)}'s, ${fD(h.s)} to ${fD(h.e)}); the holiday wins.`); }
+  return w; }
+function changeText(ch){ if(ch.kind==='give'){ if(!ch.s||!ch.e)return 'dates missing'; return `${PN(ch.who)} has ${fD(parseDate(ch.s))} ${ch.sh} to ${fD(parseDate(ch.e))} ${ch.eh}`; } const p=changePeriod(ch); const od=parseDate(ch.date); if(od===null)return 'date missing'; if(!p)return ch.newDate&&ch.newTime? `No exchange at ${fD(od)} ${ch.time} in the regular calendar. Pick the exchange's own date and time.`:'incomplete'; const o=od+parseHours(ch.time)*HOUR, n=parseDate(ch.newDate||ch.date)+parseHours(ch.newTime)*HOUR; return `Exchange of ${fD(o)} ${hm(o)} happens ${fD(n)} ${hm(n)} instead; ${PN(p.who)} has the time in between.`; }
+
+// ===================== Calendar place =====================
+function renderCal(){
+  const bn=$('calBanner'); let b='';
+  if(ERR)b+=`<div class="banner err">${esc(ERR)} <button class="btn sm" data-go="set">Open Settings</button></div>`;
+  else if(RESULT&&RESULT.noMove)b+=`<div class="banner">No move date entered, so the calendar shows the same-city schedule only. <button class="btn sm" data-go="set" data-sec="change">Enter the move date</button></div>`;
+  if(UI.note){b+=`<div class="banner">${esc(UI.note)}</div>`; UI.note='';}
+  bn.innerHTML=b;
+  $('legend').innerHTML=`<span><i class="sw M"></i>${esc(PN('M'))}</span><span><i class="sw F"></i>${esc(PN('F'))}</span><span><i class="sw x"></i>exchange day, split at the time shown</span><span><i class="sw h"></i>holiday or vacation</span><span><i class="sw c"></i>one-time change</span><span><i class="sw cap"></i>moved by the day limit</span><span><i class="sw bad"></i>over the limit</span>`;
+  renderToday(); setView(UI.view); renderPanel();
+}
+function renderToday(){
+  const el=$('todayCard'); if(!RESULT){el.innerHTML='';return;}
+  const now=nowT(); const r=RESULT;
+  if(now<r.t0||now>=r.t1){ el.innerHTML=`<div><span class="eyebrow">Today</span><span class="big">${fDY(todayT())}</span><span class="small muted">The calendar covers ${fDY(r.t0)} to ${fDY(r.t1-DAYMS)}. Change the range under Settings, Limits and range.</span></div>`; return; }
+  const seg=r.segs.find(s=>s.s<=now&&now<s.e); const nx=r.exchanges.find(x=>x.t>now);
+  const pNow=r.periods.filter(p=>p.s<=now&&now<p.e).sort((a,b)=>a.pri-b.pri)[0];
+  const nextP=r.periods.filter(p=>p.s>now&&p.pri>=1&&p.pri<=3).sort((a,b)=>a.s-b.s)[0];
+  let whyN=''; if(nx){ whyN=humanWhy(nx); }
+  el.innerHTML=`
+   <div style="--edge:var(--c${seg.p})"><span class="eyebrow">Today, ${fD(now)}</span><span class="big">${esc(childLabel())} with <span class="who ${seg.p}">${esc(PN(seg.p))}</span></span><span class="small muted">since ${fDT(seg.s)}${pNow?` · ${esc(pNow.name)}`:''}</span></div>
+   <div><span class="eyebrow">Next exchange</span>${nx?`<span class="big">${fD(nx.t)}, <span class="mono">${hm(nx.t)}</span></span><span class="small muted">to <span class="who ${nx.to}">${esc(PN(nx.to))}</span></span><span class="small muted">${whyN}</span>`:'<span class="big">none in range</span>'}</div>
+   <div><span class="eyebrow">Coming up</span>${nextP?`<span class="big">${esc(nextP.name)}</span><span class="small muted"><span class="who ${nextP.who}">${esc(PN(nextP.who))}</span> · ${fDT(nextP.s)} to ${fDT(nextP.e)}</span>`:'<span class="big">no holiday in range</span>'}</div>`;
+}
+function childLabel(){ const names=STATE.children.map(c=>c.name).filter(Boolean); if(!names.length)return 'The child is'; if(names.length===1)return names[0]+' is'; return names.slice(0,-1).join(', ')+' and '+names[names.length-1]+' are'; }
+function humanWhy(x){ if(x.kind==='change')return `One-time change: ${esc(x.why.replace(/ (begins|ends)$/,''))}.`; if(x.kind==='limit')return 'Moved by the day limit rule.'; if(x.kind==='period')return esc(x.why.charAt(0).toUpperCase()+x.why.slice(1))+'.'; return x.why==='same-city schedule'?'Same-city schedule.':'Regular schedule.'; }
+function dayCell(key){ const info=RESULT&&RESULT.days[key]; return info||null; }
+function renderMonth(){
+  const cur=UI.cur; $('monthTitle').textContent=`${MON[cur.m-1]} ${cur.y}`;
+  const g=$('grid'); let html=['Mo','Tu','We','Th','Fr','Sa','Su'].map(x=>`<div class="dow">${x}</div>`).join('');
+  const first=utc(cur.y,cur.m,1); const lead=(dow(first)+6)%7; const nd=new Date(utc(cur.y,cur.m+1,0)).getUTCDate();
+  for(let i=0;i<lead;i++)html+='<div class="day pad"></div>';
+  const today=todayT();
+  for(let d=1;d<=nd;d++){
+    const t=utc(cur.y,cur.m,d), key=ymd(t), info=dayCell(key);
+    let cls='day', style='', inner=`<span class="n">${d}</span>`;
+    if(!info){ cls+=' off'; }
+    else {
+      if(info.second){ cls+=' x'; style=` style="--a:var(--c${info.first}-soft);--b:var(--c${info.second}-soft)"`; } else cls+=' '+info.first;
+      if(info.bad)cls+=' bad'; if(info.cap)cls+=' cap';
+      inner+=`<span class="ini">${info.second?PI(info.first)+'→'+PI(info.second):PI(info.first)}</span>`;
+      const xs=RESULT.exchanges.filter(x=>x.t>=t&&x.t<t+DAYMS);
+      for(const x of xs)inner+=`<span class="xch">${hm(x.t)} to ${PI(x.to)}</span>`;
+      if(info.pname&&info.ppri>0)inner+=`<span class="band" title="${esc(info.pname)}">${esc(info.pname)}</span>`;
+      if(info.chg)inner+=`<span class="band c" title="${esc(info.chg)}">${esc(info.chg)}</span>`;
+      if(info.cap)inner+=`<span class="band" style="border-left-color:var(--ink-2);background:var(--panel)">moved by limit</span>`;
+    }
+    if(t===today)cls+=' today';
+    html+=`<button type="button" class="${cls}"${style} data-day="${key}"${UI.sel===key?' aria-current="true"':''} aria-label="${fDL(t)}${info?`, with ${PN(info.first)}`:''}">${inner}</button>`;
   }
-  $('grids').innerHTML=html;
-  $('exlist').querySelector('tbody').innerHTML=r.exchanges.map(x=>`<tr><td class="mono">${ymd(x.t)} ${DOWN[dow(x.t)]}</td><td class="mono">${hm(x.t)}</td><td>${PN[x.from]}</td><td>${PN[x.to]}</td><td>${esc(x.why)}</td></tr>`).join('');
+  g.innerHTML=html;
 }
-function run(){
-  const c=readConfig();
-  try{ RESULT=computeSchedule(c); render(RESULT,c); saveState(); $('saved').textContent='Built. Settings saved in this browser.'; }
-  catch(e){ $('flags').innerHTML=`<p class="flag">${esc(e.message)}</p>`; }
+function renderPanel(){
+  const el=$('dayPanel'); if(!UI.sel||!RESULT){el.innerHTML='<span class="eyebrow">Selected day</span><p class="muted">Tap a day to see who has it and why.</p>';return;}
+  const t=parseDate(UI.sel), info=dayCell(UI.sel);
+  if(!info){ el.innerHTML=`<div><span class="eyebrow">Selected day</span><h3>${fDL(t)}</h3></div><p class="muted">Outside the calendar range.</p>`; return; }
+  const xs=RESULT.exchanges.filter(x=>x.t>=t&&x.t<t+DAYMS);
+  let rule; if(info.ppri===0)rule=`One-time change: ${esc(info.pname)}.`; else if(info.pname)rule=`${esc(info.pname)}: ${esc(PN(info.pwho))} has this period.${info.chg?` One-time change today: ${esc(info.chg)}.`:''}`; else if(info.cap)rule='Moved to the other parent by the day limit rule.'; else rule=(RESULT.ldStart!==null&&t<RESULT.ldStart)||RESULT.begins==='never'?'Same-city schedule.':`Regular schedule: ${esc(regularText())}.`;
+  if(info.bad)rule+=` <span class="warnt">Part of a stretch over the ${STATE.cal.limit}-day limit.</span>`;
+  const withLine=info.second?`<span class="who ${info.first}">${esc(PN(info.first))}</span> until <span class="mono">${String(info.firstH).padStart(2,'0')}:00</span>, then <span class="who ${info.second}">${esc(PN(info.second))}</span>`:`<span class="who ${info.first}">${esc(PN(info.first))}</span> all day`;
+  const inRange=RESULT.periods.filter(p=>p.s<t+DAYMS&&p.e>t&&p.pri>0).sort((a,b)=>a.pri-b.pri);
+  el.innerHTML=`
+   <div><span class="eyebrow">Selected day</span><h3>${fDL(t)}</h3></div>
+   <dl class="kv">
+     <dt>With</dt><dd>${withLine}</dd>
+     ${xs.map(x=>`<dt>Exchange</dt><dd><span class="mono">${hm(x.t)}</span>, ${esc(PN(x.from))} to ${esc(PN(x.to))}${x.kind==='change'?' <span class="pill c">changed</span>':''}<br><span class="small muted">${humanWhy(x)}${exchangePlace(x)}</span></dd>`).join('')}
+     <dt>Rule</dt><dd>${rule}</dd>
+     ${inRange.length>1?`<dt>Also</dt><dd class="small muted">${inRange.slice(1).map(p=>esc(p.name)).join(', ')} (lower priority)</dd>`:''}
+   </dl>
+   <div class="rule"></div>
+   <div class="row">
+     ${xs.map(x=>`<button class="btn sm" data-act="changeExchange" data-arg="${x.t}">Change the ${hm(x.t)} exchange</button>`).join('')}
+     <button class="btn sm" data-act="addVacHere" data-arg="${UI.sel}">Add a vacation here</button>
+     <button class="btn sm" data-act="giveHere" data-arg="${UI.sel}">Give this day to a parent</button>
+     <button class="btn sm quiet" data-go="set" data-sec="hol">Edit holidays</button>
+   </div>
+   <p class="notice">A change made from here applies to this date only. The regular schedule is not touched.</p>`;
 }
-// ----- exports -----
+function exchangePlace(x){ const pl=(x.why==='same-city schedule')?STATE.phase.weekly.place:STATE.regular.place; return pl&&x.kind==='regular'?` At ${esc(pl)}.`:''; }
+function renderAgenda(){
+  const el=$('agenda'); if(!RESULT){el.innerHTML='';return;} const now=nowT();
+  const list=UI.agendaAll?RESULT.exchanges:RESULT.exchanges.filter(x=>x.t>=now-DAYMS).slice(0,60);
+  $('agendaHint').textContent=UI.agendaAll?`${RESULT.exchanges.length} exchanges, ${fDY(RESULT.t0)} to ${fDY(RESULT.t1-DAYMS)}`:`Next ${list.length} exchanges from today.`;
+  let html='', lastKey='';
+  for(const x of list){ const d=new Date(x.t); const k=`${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`; if(k!==lastKey){lastKey=k;html+=`<div class="mh eyebrow">${k}</div>`;}
+    const pill=x.kind==='change'?`<span class="pill c">${esc(x.why.replace(/ (begins|ends)$/,''))}</span>`:x.kind==='period'?`<span class="pill h">${esc(x.why)}</span>`:x.kind==='limit'?`<span class="pill w">day limit rule</span>`:`<span class="pill">${esc(x.why)}</span>`;
+    html+=`<div class="ag${x.t<now?' past':''}"><span>${fD(x.t)}</span><span class="mono">${hm(x.t)}</span><span><span class="who ${x.from}">${esc(PN(x.from))}</span> to <span class="who ${x.to}">${esc(PN(x.to))}</span> &nbsp; ${pill}</span></div>`; }
+  el.innerHTML=html||'<div class="ag"><span></span><span></span><span class="muted">No exchanges.</span></div>';
+}
+function renderYear(){
+  const el=$('year'); if(!RESULT){el.innerHTML='';return;} const y=UI.cur.y; let html='';
+  for(let m=1;m<=12;m++){ const first=utc(y,m,1), lead=(dow(first)+6)%7, nd=new Date(utc(y,m+1,0)).getUTCDate(); let g='';
+    for(let i=0;i<lead;i++)g+='<span class="c pad"></span>';
+    for(let d=1;d<=nd;d++){ const info=dayCell(ymd(utc(y,m,d))); g+=`<span class="c ${info?(info.second?'x':info.first):''}${info&&info.ppri>0?' h':''}${info&&info.ppri===0?' c0':''}">${d}</span>`; }
+    html+=`<button type="button" class="mini" data-month="${m}"><h4>${MON[m-1]} ${y}</h4><div class="g">${g}</div></button>`; }
+  el.innerHTML=html;
+}
+function setView(v){ UI.view=v; for(const k of ['month','agenda','year']){ $('view'+k[0].toUpperCase()+k.slice(1)).hidden=k!==v; $('v-'+k).setAttribute('aria-pressed',k===v); } if(v==='month')renderMonth(); if(v==='agenda')renderAgenda(); if(v==='year')renderYear(); }
+
+// ===================== Settings place =====================
+const SECTIONS=[
+ {id:'people',t:'Parents and children',s:()=>`${PN('M')}, ${PN('F')}${STATE.children.filter(c=>c.on&&c.md).map(c=>` · ${c.name||'child'} (${c.md})`).join('')}`},
+ {id:'regular',t:'Regular schedule',s:()=>regularText()},
+ {id:'change',t:'Schedule change',s:()=>phaseText()},
+ {id:'hol',t:'Holidays and birthdays',s:()=>`${Object.values(STATE.holidays).filter(h=>h.on).length} holidays selected`},
+ {id:'vac',t:'Vacations',s:()=>`${STATE.vacations.allow.M} / ${STATE.vacations.allow.F} days a year · ${STATE.vacations.list.length} planned`},
+ {id:'changes',t:'One-time changes',s:()=>`${STATE.changes.length} change${STATE.changes.length===1?'':'s'}`},
+ {id:'limits',t:'Limits and range',s:()=>`${STATE.cal.limit} days · ${STATE.cal.start} for ${STATE.cal.years} year${STATE.cal.years>1?'s':''}`},
+ {id:'share',t:'Share and export',s:()=>'Link, .ics, .csv, print'},
+];
+function renderSet(){ renderNav(); renderEdit(); const bn=$('setBanner'); bn.innerHTML=ERR?`<div class="banner err">${esc(ERR)}</div>`:''; }
+function renderNav(){ $('setNav').innerHTML=SECTIONS.map((x,i)=>`<button aria-selected="${x.id===UI.section}" data-sec="${x.id}"><span class="num">${i+1}</span><span><span class="t">${esc(x.t)}</span><br><span class="s">${esc(x.s())}</span></span></button>`).join(''); }
+function fld(label,inner){ return `<div class="field"><span class="lbl">${label}</span>${inner}</div>`; }
+function inp(path,opts={}){ const v=getPath(path); const t=opts.type||'text'; return `<input type="${t}" data-b="${path}"${opts.num?' data-t="num"':''} value="${esc(v==null?'':v)}"${opts.ph?` placeholder="${esc(opts.ph)}"`:''}${t==='time'?' step="3600"':''}${opts.min!=null?` min="${opts.min}"`:''}${opts.max!=null?` max="${opts.max}"`:''}>`; }
+function sel(path,options,opts={}){ const v=getPath(path); return `<select data-b="${path}"${opts.num?' data-t="num"':''}>${options.map(([val,l])=>`<option value="${val}"${String(val)===String(v)?' selected':''}>${esc(l)}</option>`).join('')}</select>`; }
+function chk(path,label){ return `<label class="field check"><input type="checkbox" data-b="${path}" data-t="bool"${getPath(path)?' checked':''}> <span>${label}</span></label>`; }
+function endInp(path){ const v=getPath(path); const eod=v==='24:00'; return `<span class="row" style="gap:6px"><input type="time" data-b="${path}" value="${eod?'00:00':esc(v)}" step="3600"${eod?' disabled':''}><label class="small row" style="gap:4px"><input type="checkbox" data-b="${path}" data-t="eod"${eod?' checked':''}> end of day</label></span>`; }
+function periodFields(base){ return `<div class="form tight">${fld('Goes to',sel(base+'.who',WHO_OPTS()))}${fld('Days before',inp(base+'.before',{type:'number',num:true,min:0,max:60}))}${fld('Days after',inp(base+'.after',{type:'number',num:true,min:0,max:60}))}${fld('Starts at',inp(base+'.start',{type:'time'}))}${fld('Ends at',endInp(base+'.end'))}</div>`; }
+function stripHtml(){ if(!RESULT)return ''; const t0=todayT(); let h=''; for(let i=0;i<28;i++){ const t=addD(t0,i); const info=dayCell(ymd(t)); h+=`<span class="${info?(info.second?'x':info.first):''}${info&&info.hol?' h':''}" title="${fD(t)}${info?' '+PN(info.first):''}">${new Date(t).getUTCDate()}</span>`; } return `<div class="preview"><span class="eyebrow">Next four weeks from today</span><div class="strip">${h}</div></div>`; }
+function colorPicker(code){ return `<div class="swatches" role="group" aria-label="Color for ${esc(PN(code))}">${COLORS.map(c=>`<button type="button" style="--c:var(--${c})" aria-pressed="${STATE.parents[code].color===c}" data-act="color" data-arg="${code}:${c}" aria-label="${c}"></button>`).join('')}</div>`; }
+
+function secHtml(id){
+  const S=STATE;
+  switch(id){
+  case 'people': return `<div class="head"><div><h2>Parents and children</h2><p class="muted">Names and colors are used everywhere. Birthdays become calendar entries.</p></div></div>
+    <div class="form four">${fld('Parent 1',inp('parents.M.name'))}${fld('Color',colorPicker('M'))}${fld('Parent 2',inp('parents.F.name'))}${fld('Color',colorPicker('F'))}</div>
+    <div class="list">${S.children.map((c,i)=>`<div class="item"><input type="checkbox" data-b="children.${i}.on" data-t="bool"${c.on?' checked':''} aria-label="Use this birthday"><div><div class="form tight">${fld('Child',inp(`children.${i}.name`,{ph:'Name'}))}${fld('Birthday (MM-DD)',inp(`children.${i}.md`,{ph:'MM-DD'}))}</div><div class="res" style="margin-top:6px">${esc(childText(c))}</div><details class="help" style="margin-top:6px"><summary>Birthday period settings</summary>${periodFields(`children.${i}`)}</details></div><button class="btn sm danger" data-act="rmChild" data-arg="${i}">Remove</button></div>`).join('')}
+    ${['M','F'].map(k=>`<div class="item"><input type="checkbox" data-b="pbd.${k}.on" data-t="bool"${S.pbd[k].on?' checked':''} aria-label="Use this birthday"><div><div class="form tight">${fld(`${esc(PN(k))}'s birthday (MM-DD)`,inp(`pbd.${k}.md`,{ph:'MM-DD'}))}</div>${S.pbd[k].on&&S.pbd[k].md?`<div class="res" style="margin-top:6px">${esc(childText({...S.pbd[k],who:k}))}</div>`:''}<details class="help" style="margin-top:6px"><summary>Birthday period settings</summary><div class="form tight">${fld('Days before',inp(`pbd.${k}.before`,{type:'number',num:true,min:0,max:60}))}${fld('Days after',inp(`pbd.${k}.after`,{type:'number',num:true,min:0,max:60}))}${fld('Starts at',inp(`pbd.${k}.start`,{type:'time'}))}${fld('Ends at',endInp(`pbd.${k}.end`))}</div></details></div><span></span></div>`).join('')}</div>
+    <button class="btn sm" style="align-self:flex-start" data-act="addChild">+ Add a child</button>`;
+  case 'regular': return `<div class="head"><div><h2>Regular schedule</h2><p class="muted">The pattern that applies when no holiday, vacation or one-time change does.</p></div></div>
+    ${chk('regular.on','Use a block pattern (turn off for a same-city schedule only)')}
+    <div class="tpl">${Object.entries(PRESETS).map(([k,p])=>`<button type="button" aria-pressed="${S.regular.preset===k}" data-act="preset" data-arg="${k}"><span class="bar">${[...p.bar].map(c=>`<i class="${c}"></i>`).join('')}</span><span class="nm">${esc(p.nm)}</span><span class="ds">${esc(p.ds)}</span></button>`).join('')}</div>
+    <div class="form">${fld(`Days per block (${esc(PN('M'))}, ${esc(PN('F'))}, ${esc(PN('M'))}, ...)`,inp('regular.pattern',{ph:'21, 11'}))}${fld('First block goes to',sel('regular.first',[['M',PN('M')],['F',PN('F')]]))}${fld('Exchange time',inp('regular.xtime',{type:'time'}))}${fld('Usual exchange place (optional)',inp('regular.place',{ph:'School, airport, ...'}))}</div>
+    <div class="notice">${esc(regularText())}. When the pattern starts is set under Schedule change.</div>
+    ${stripHtml()}
+    <details class="help"><summary>How the first day is counted</summary><p>The first block starts at the exchange time on the day the pattern begins, with the parent in "First block goes to". Blocks are counted in whole days from that time.</p></details>`;
+  case 'change': { const p=S.phase; return `<div class="head"><div><h2>Schedule change</h2><p class="muted">One schedule before a date, another after it. Common after a move or a school start.</p></div></div>
+    <div class="form">${fld('The block pattern begins',sel('phase.begins',[['move','A number of days before a move date'],['date','On a date'],['start','At the calendar start (no earlier schedule)']]))}
+    ${p.begins==='move'?fld('Move date',inp('phase.move',{type:'date'}))+fld('Days before the move it begins',inp('phase.movePre',{type:'number',num:true,min:0,max:60})):''}
+    ${p.begins==='date'?fld('Date the blocks begin',inp('phase.ldDate',{type:'date'})):''}</div>
+    <div class="notice">${esc(phaseText())}${RESULT&&RESULT.ldStart!==null?`. Blocks begin ${fDT(RESULT.ldStart)}.`:''}</div>
+    ${p.begins!=='start'?`<h3>Before the blocks: same-city schedule</h3>
+    ${chk('phase.weeklyOn','Use a two-week same-city schedule before the blocks begin')}
+    <div class="form">${fld('Week A starts on (a Monday, or the Monday before this date)',inp('phase.weekAnchor',{type:'date'}))}${fld('Usual exchange place (optional)',inp('phase.weekly.place',{ph:'School, home, ...'}))}</div>
+    <p class="small muted">Each row gives one parent a period. The other parent has all the time not listed. Weeks alternate A, B, A, B.</p>
+    <div class="wrows">${p.weekly.rows.map((r,i)=>`<div class="wrow">${fld('Week',sel(`phase.weekly.rows.${i}.week`,[[1,'Week A'],[2,'Week B']],{num:true}))}${fld('Parent',sel(`phase.weekly.rows.${i}.parent`,[['F',PN('F')],['M',PN('M')]]))}${fld('From',sel(`phase.weekly.rows.${i}.sd`,DOWN.map((d,n)=>[n,d]),{num:true}))}${fld('at',inp(`phase.weekly.rows.${i}.st`,{type:'time'}))}${fld('To',sel(`phase.weekly.rows.${i}.ed`,DOWN.map((d,n)=>[n,d]),{num:true}))}${fld('at',inp(`phase.weekly.rows.${i}.et`,{type:'time'}))}<button class="btn sm danger" data-act="rmRow" data-arg="${i}">Remove</button></div>`).join('')}</div>
+    <button class="btn sm" style="align-self:flex-start" data-act="addRow">+ Add a period</button>`:''}
+    ${stripHtml()}`; }
+  case 'hol': { const groups=[['Parenting plan periods',CAT.filter(h=>h.region==='Plan')],['United States and Canada',CAT.filter(h=>h.region==='Both')],['United States',CAT.filter(h=>h.region==='US')],['Canada',CAT.filter(h=>h.region==='Canada')]];
+    return `<div class="head"><div><h2>Holidays and birthdays</h2><p class="muted">Tick what your plan covers. Each row shows the dates it produces for this year and next, so the setting can be checked against the plan without reading the rule.</p></div></div>
+    ${groups.map(([g,list])=>`<h3>${g}</h3><div class="list">${list.map(h=>{ const cfg=S.holidays[h.id]||{on:false,...(h.plan||{who:'Modd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[h.id]||{}),dates:''}; const open=UI.openHol===h.id; return `<div class="item${open?' open':''}"><input type="checkbox" data-act="holOn" data-arg="${h.id}"${cfg.on?' checked':''} aria-label="${esc(h.name)}"><div><b>${esc(h.name)}</b> <span class="small muted">· ${esc(h.ruleText)}${h.sameCity?' · same city only':''} · ${esc(whoText(cfg.who))}</span>${cfg.on?`<div class="res">${esc(holRowText(h,cfg))}</div>`:''}</div><button class="btn sm" data-act="holEdit" data-arg="${h.id}">${open?'Close':'Edit'}</button>
+      ${open?`<div class="sub">${periodFields('holidays.'+h.id)}${fld('Specific dates for some years (optional)',inp('holidays.'+h.id+'.dates',{ph:'2027-11-22 10:00 to 2027-11-29 10:00; 2028-...'}))}<p class="help">Specific dates replace the computed dates for the years you list. Several are separated by semicolons.</p></div>`:''}</div>`; }).join('')}</div>`).join('')}
+    <h3>Birthdays</h3><p class="small muted">Set under Parents and children. <button class="btn sm" data-sec="people">Open</button></p>
+    <details class="help"><summary>Which wins when two overlap</summary><ol><li>One-time changes</li><li>Birthdays, ${esc(PN('M'))}'s Day, ${esc(PN('F'))}'s Day</li><li>Thanksgiving, Christmas, New Year</li><li>Vacations</li><li>Other holidays</li><li>The regular schedule</li></ol></details>`; }
+  case 'vac': { const V=S.vacations; const Y=new Date().getFullYear(); return `<div class="head"><div><h2>Vacations</h2><p class="muted">The allowance from the plan, and the vacations actually planned. A vacation takes time from the other parent's regular schedule; holidays still win.</p></div><button class="btn sm primary" data-act="addVac">+ Add a vacation</button></div>
+    <div class="form four">${fld(`${esc(PN('M'))}, days a year`,inp('vacations.allow.M',{type:'number',num:true,min:0}))}${fld(`${esc(PN('F'))}, days a year`,inp('vacations.allow.F',{type:'number',num:true,min:0}))}${fld('Notice required (days)',inp('vacations.notice',{type:'number',num:true,min:0}))}${fld('Longest single vacation (days)',inp('vacations.maxLen',{type:'number',num:true,min:0}))}</div>
+    <div class="row small muted">${[Y,Y+1].map(y=>`<span class="pill">${y}: ${esc(PN('M'))} ${fmt1(vacUsed('M',y))} of ${V.allow.M} · ${esc(PN('F'))} ${fmt1(vacUsed('F',y))} of ${V.allow.F}</span>`).join('')}</div>
+    <div class="list">${V.list.length?V.list.map((v,i)=>{ const open=UI.openVac===v.id; const w=vacWarnings(v); return `<div class="item${open?' open':''}"><span class="pill h">vacation</span><div><b><span class="who ${v.who}">${esc(PN(v.who))}</span>${v.note?' · '+esc(v.note):''}</b><div class="res">${v.s&&v.e?`${fD(parseDate(v.s))} ${esc(v.sh)} to ${fD(parseDate(v.e))} ${esc(v.eh)}`:'dates missing'}${w.length?`<br><span class="warnt">${w.map(esc).join(' ')}</span>`:''}</div></div><span class="row"><button class="btn sm" data-act="vacEdit" data-arg="${v.id}">${open?'Close':'Edit'}</button><button class="btn sm danger" data-act="rmVac" data-arg="${i}">Remove</button></span>
+      ${open?`<div class="sub"><div class="form tight">${fld('Parent',sel(`vacations.list.${i}.who`,[['M',PN('M')],['F',PN('F')]]))}${fld('First day',inp(`vacations.list.${i}.s`,{type:'date'}))}${fld('from',inp(`vacations.list.${i}.sh`,{type:'time'}))}${fld('Last day',inp(`vacations.list.${i}.e`,{type:'date'}))}${fld('until',inp(`vacations.list.${i}.eh`,{type:'time'}))}${fld('Note',inp(`vacations.list.${i}.note`,{ph:'Summer trip'}))}</div></div>`:''}</div>`; }).join(''):'<div class="item"><span></span><span class="muted">No vacations planned.</span><span></span></div>'}</div>
+    ${S.customs.length?`<h3>Other periods</h3><div class="list">${S.customs.map((c,i)=>`<div class="item"><span class="pill">custom</span><div><div class="form tight">${fld('Name',inp(`customs.${i}.name`))}${fld('Goes to',sel(`customs.${i}.who`,WHO_OPTS()))}${fld('Dates',inp(`customs.${i}.dates`,{ph:'2027-07-01 10:00 to 2027-07-15 10:00'}))}${fld('Priority (1 strongest, 4 weakest)',inp(`customs.${i}.pri`,{type:'number',num:true,min:1,max:4}))}</div></div><button class="btn sm danger" data-act="rmCustom" data-arg="${i}">Remove</button></div>`).join('')}</div>`:''}
+    <button class="btn sm" style="align-self:flex-start" data-act="addCustom">+ Add another kind of period</button>`; }
+  case 'changes': return `<div class="head"><div><h2>One-time changes</h2><p class="muted">A pickup moved, a day swapped, a weekend traded. Each applies to its date only. The regular schedule is never edited for a one-off. The easiest way to add one is from the day on the calendar.</p></div><span class="row"><button class="btn sm primary" data-act="addChange" data-arg="move">+ Move an exchange</button><button class="btn sm" data-act="addChange" data-arg="give">+ Give time to a parent</button></span></div>
+    <div class="list">${S.changes.length?S.changes.map((ch,i)=>{ const open=UI.openChg===ch.id; return `<div class="item${open?' open':''}"><span class="pill c">${ch.kind==='give'?'time given':'exchange moved'}</span><div><b>${esc(ch.note||'One-time change')}</b><div class="res">${esc(changeText(ch))}</div></div><span class="row"><button class="btn sm" data-act="chgEdit" data-arg="${ch.id}">${open?'Close':'Edit'}</button><button class="btn sm danger" data-act="rmChange" data-arg="${i}">Remove</button></span>
+      ${open?`<div class="sub">${ch.kind==='give'?`<div class="form tight">${fld('Parent',sel(`changes.${i}.who`,[['M',PN('M')],['F',PN('F')]]))}${fld('From',inp(`changes.${i}.s`,{type:'date'}))}${fld('at',inp(`changes.${i}.sh`,{type:'time'}))}${fld('To',inp(`changes.${i}.e`,{type:'date'}))}${fld('at',inp(`changes.${i}.eh`,{type:'time'}))}${fld('Note (shown on the calendar)',inp(`changes.${i}.note`,{ph:'Swapped for the recital'}))}</div>`:`<div class="form tight">${fld('Exchange on',inp(`changes.${i}.date`,{type:'date'}))}${fld('at',inp(`changes.${i}.time`,{type:'time'}))}${fld('Happens instead on',inp(`changes.${i}.newDate`,{type:'date'}))}${fld('at',inp(`changes.${i}.newTime`,{type:'time'}))}${fld('Note (shown on the calendar)',inp(`changes.${i}.note`,{ph:'School concert'}))}</div><p class="help">The parent who had the child before the exchange keeps the child until the new time, or the receiving parent gets the child earlier.</p>`}</div>`:''}</div>`; }).join(''):'<div class="item"><span></span><span class="muted">No one-time changes.</span><span></span></div>'}</div>`;
+  case 'limits': { const r=RESULT; return `<div class="head"><div><h2>Limits and range</h2><p class="muted">Rules that protect the child from long gaps, and how far the calendar reaches.</p></div></div>
+    <div class="form">${fld('Longest time away from either parent (days)',inp('cal.limit',{type:'number',num:true,min:1,max:365}))}${fld('If a holiday pushes past the limit',sel('cal.mode',[['cap','Give the other parent the extra days next to the holiday'],['none','Only mark it on the calendar']]))}${fld('Calendar starts on',inp('cal.start',{type:'date'}))}${fld('Years to cover',inp('cal.years',{type:'number',num:true,min:1,max:10}))}</div>
+    <p class="help">The extra days come from the regular time next to the holiday: from the end of the stretch where it meets the other parent's next block; if the stretch ends with a holiday, from its start. The same-city phase is not under the rule.</p>
+    ${r?`<div class="tblbox"><table class="tbl"><thead><tr><th>Year</th><th class="num">${esc(PN('M'))} days</th><th class="num">${esc(PN('F'))} days</th><th class="num">Exchanges</th><th class="num">Longest with ${esc(PN('M'))}</th><th class="num">Longest with ${esc(PN('F'))}</th><th>Over the limit</th><th class="num">Days moved</th></tr></thead><tbody>${r.summary.map(s=>`<tr><td>${s.y}</td><td class="num">${fmt1(s.mDays)}</td><td class="num">${fmt1(s.fDays)}</td><td class="num">${s.ex}</td><td class="num">${fmt1(s.lm)}</td><td class="num">${fmt1(s.lf)}</td><td class="${s.over.length?'warnt':'okt'}">${s.over.length?s.over.length+' stretch'+(s.over.length>1?'es':''):'none'}</td><td class="num">${fmt1(s.moved)}</td></tr>`).join('')}</tbody></table></div>
+    <p class="small muted">Days are counted in hours; an exchange day is split at the exchange time, so totals can end in a decimal.</p>
+    ${r.over.length?`<div class="notice warn"><b>${r.over.length} stretch${r.over.length>1?'es':''} over ${S.cal.limit} days:</b><br>${r.over.map(sg=>`${fDT(sg.s)} to ${fDT(sg.e)}: ${fmt1(sg.h/24)} days with ${esc(PN(sg.p))}`).join('<br>')}</div>`:`<div class="notice">Nothing goes over ${S.cal.limit} days in the range.</div>`}`:''}`; }
+  case 'share': return `<div class="head"><div><h2>Share and export</h2><p class="muted">Settings stay in this browser. A link carries them to any other phone or computer. Nothing is stored on a server.</p></div></div>
+    <div class="list">
+     <div class="item"><span class="pill">link</span><div><b>Share link</b><div class="res">Opens this exact calendar, with every setting, on the other parent's device. Send it again after a change.</div><input class="mono small" style="width:100%;margin-top:6px;font:inherit;font-family:var(--mono);font-size:12px;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink)" readonly value="${esc(shareLink())}" id="shareUrl"></div><button class="btn sm primary" data-act="copyLink">Copy link</button></div>
+     <div class="item"><span class="pill">.ics</span><div><b>Calendar file</b><div class="res">Apple Calendar, Outlook, Google Calendar import. One event per block and one per exchange.</div></div><button class="btn sm" data-act="ics">Download</button></div>
+     <div class="item"><span class="pill">.csv</span><div><b>Spreadsheet of blocks and exchanges</b><div class="res">Google Calendar's CSV import format.</div></div><button class="btn sm" data-act="csv">Download</button></div>
+     <div class="item"><span class="pill">text</span><div><b>Exchange list</b><div class="res">Copied as plain text for a message or email.</div></div><button class="btn sm" data-act="copyList">Copy</button></div>
+     <div class="item"><span class="pill">print</span><div><b>Print</b><div class="res">Prints the calendar view that is open (month, exchanges or year).</div></div><button class="btn sm" data-act="print">Print</button></div>
+    </div>
+    <p class="small muted" id="saveMsg"></p>
+    <h3>Start over</h3>
+    <div class="row"><button class="btn sm" data-act="loadPlan">Load the parenting plan defaults</button><button class="btn sm" data-act="runSetup">Run the setup again</button></div>
+    <div class="notice">Runs entirely in the browser. Nothing you enter is sent anywhere. A planning aid, not legal advice; the parenting plan controls.</div>`;
+  }
+  return '';
+}
+function renderEdit(){ $('setEdit').innerHTML=secHtml(UI.section)+`<div class="foot"><span class="small muted">Changes apply at once and are saved in this browser.</span><button class="btn quiet" data-go="cal">&#8592; Back to calendar</button></div>`; }
+
+// ===================== Setup place =====================
+const STEPS=[['Who','people'],['Schedule','regular'],['Change','change'],['Holidays','hol'],['Vacations','vac'],['Limits','limits'],['Finish','review']];
+function reviewHtml(){ const S=STATE; const hol=Object.entries(S.holidays).filter(([,h])=>h.on).map(([id])=>CAT.find(h=>h.id===id).name); return `<div class="head"><div><h2>7. Check and finish</h2><p class="muted">Everything here can be changed later from Settings. Tap a line to go back to it.</p></div></div>
+  <div class="review"><dl>
+   <dt><a href="#" data-step="1">Parents</a></dt><dd><span class="who M">${esc(PN('M'))}</span> &nbsp; <span class="who F">${esc(PN('F'))}</span></dd>
+   <dt><a href="#" data-step="1">Children</a></dt><dd>${S.children.filter(c=>c.on).map(c=>`${esc(c.name||'child')}, birthday ${esc(c.md||'not set')}`).join('; ')||'none'}</dd>
+   <dt><a href="#" data-step="2">Regular schedule</a></dt><dd>${esc(regularText())}</dd>
+   <dt><a href="#" data-step="3">Schedule change</a></dt><dd>${esc(phaseText())}</dd>
+   <dt><a href="#" data-step="4">Holidays</a></dt><dd>${hol.length} selected: ${esc(hol.join(', '))}</dd>
+   <dt><a href="#" data-step="5">Vacations</a></dt><dd>${S.vacations.allow.M} and ${S.vacations.allow.F} days a year, ${S.vacations.notice} days notice, ${S.vacations.list.length} planned</dd>
+   <dt><a href="#" data-step="6">Limit</a></dt><dd>${S.cal.limit} days; ${S.cal.mode==='cap'?'extra days go to the other parent':'only marked'}; calendar ${esc(S.cal.start)} for ${S.cal.years} years</dd>
+  </dl></div>
+  ${ERR?`<div class="notice warn">${esc(ERR)}</div>`:stripHtml()}
+  <div class="notice">Your settings stay in this browser. Under Settings, Share and export, a link opens the same calendar on any other phone.</div>`; }
+function renderSetup(){
+  $('stepBar').innerHTML=STEPS.map((s,i)=>`<button type="button" class="${i+1<UI.step?'done':i+1===UI.step?'now':''}" data-step="${i+1}">${i+1}. ${s[0]}</button>`).join('');
+  const sec=STEPS[UI.step-1][1]; const body=sec==='review'?reviewHtml():secHtml(sec).replace(/<h2>/,`<h2>${UI.step}. `);
+  $('setupCard').innerHTML=body+`<div class="foot"><button class="btn" data-act="stepPrev"${UI.step===1?' disabled':''}>Back</button><span class="small muted">Step ${UI.step} of 7</span><button class="btn primary" data-act="stepNext">${UI.step===7?'Finish and open the calendar':'Next'}</button></div>`;
+}
+
+// ===================== places and events =====================
+function go(p,sec){ UI.place=p; for(const k of ['cal','set','setup']){ $('place-'+k).classList.toggle('on',k===p); $('tab-'+k).setAttribute('aria-selected',k===p); } if(sec)UI.section=sec; render(); window.scrollTo({top:0}); }
+function render(){ if(UI.place==='cal')renderCal(); else if(UI.place==='set')renderSet(); else renderSetup(); }
+function rerender(){ rebuild(); render(); }
+
+document.addEventListener('change',e=>{
+  const t=e.target; if(!bindInput(t))return;
+  // a holiday edited while unticked turns on
+  const m=/^holidays\.([^.]+)\./.exec(t.dataset.b); if(m&&STATE.holidays[m[1]])STATE.holidays[m[1]].on=true;
+  rerender();
+});
+document.addEventListener('click',async e=>{
+  const a=e.target.closest('a[data-step]'); if(a){ e.preventDefault(); UI.step=+a.dataset.step; renderSetup(); window.scrollTo({top:0}); return; }
+  const b=e.target.closest('button,input[type=checkbox][data-act]'); if(!b)return;
+  if(b.dataset.go){ go(b.dataset.go,b.dataset.sec); return; }
+  if(b.dataset.sec&&!b.dataset.act){ UI.section=b.dataset.sec; if(UI.place!=='set')go('set'); else {renderSet();window.scrollTo({top:0});} return; }
+  if(b.dataset.view){ setView(b.dataset.view); return; }
+  if(b.dataset.day){ UI.sel=b.dataset.day; renderMonth(); renderPanel(); return; }
+  if(b.dataset.month){ UI.cur={y:UI.cur.y,m:+b.dataset.month}; setView('month'); return; }
+  if(b.dataset.step&&!b.dataset.act){ UI.step=+b.dataset.step; renderSetup(); return; }
+  const act=b.dataset.act, arg=b.dataset.arg; if(!act)return;
+  const S=STATE;
+  switch(act){
+    case 'prevMonth': { let {y,m}=UI.cur; m--; if(m<1){m=12;y--;} UI.cur={y,m}; if(UI.view==='year')renderYear(); else renderMonth(); return; }
+    case 'nextMonth': { let {y,m}=UI.cur; m++; if(m>12){m=1;y++;} UI.cur={y,m}; if(UI.view==='year')renderYear(); else renderMonth(); return; }
+    case 'goToday': { const d=new Date(); UI.cur={y:d.getFullYear(),m:d.getMonth()+1}; UI.sel=ymd(todayT()); setView('month'); renderPanel(); return; }
+    case 'agendaAll': UI.agendaAll=!UI.agendaAll; b.textContent=UI.agendaAll?'Show from today':'Show the whole calendar'; renderAgenda(); return;
+    case 'changeExchange': { const t=+arg; const id=uid(); S.changes.push({id,kind:'move',date:ymd(t),time:hm(t),newDate:ymd(t),newTime:hm(t),note:''}); UI.openChg=id; rerender(); go('set','changes'); return; }
+    case 'addVacHere': { const id=uid(); const s=parseDate(arg); S.vacations.list.push({id,who:'M',s:arg,sh:'10:00',e:ymd(addD(s,7)),eh:'10:00',note:''}); UI.openVac=id; rerender(); go('set','vac'); return; }
+    case 'giveHere': { const id=uid(); const s=parseDate(arg); const info=dayCell(arg); const other=info?(info.first==='M'?'F':'M'):'M'; S.changes.push({id,kind:'give',who:other,s:arg,sh:'00:00',e:ymd(addD(s,1)),eh:'00:00',note:''}); UI.openChg=id; rerender(); go('set','changes'); return; }
+    case 'color': { const [code,c]=arg.split(':'); S.parents[code].color=c; const o=code==='M'?'F':'M'; if(S.parents[o].color===c)S.parents[o].color=COLORS.find(x=>x!==c); rerender(); return; }
+    case 'addChild': S.children.push({id:uid(),name:'',md:'',who:'Modd',before:0,after:1,start:'16:00',end:'10:00',on:true}); rerender(); return;
+    case 'rmChild': S.children.splice(+arg,1); rerender(); return;
+    case 'preset': { const p=PRESETS[arg]; S.regular.preset=arg; S.regular.on=true; if(p.pattern){S.regular.pattern=p.pattern;S.regular.first=p.first;S.regular.xtime=p.xtime;} rerender(); return; }
+    case 'addRow': S.phase.weekly.rows.push({week:1,parent:'F',sd:5,st:'17:00',ed:0,et:'17:00'}); rerender(); return;
+    case 'rmRow': S.phase.weekly.rows.splice(+arg,1); rerender(); return;
+    case 'holOn': { const h=CAT.find(x=>x.id===arg); if(!S.holidays[arg])S.holidays[arg]={on:false,...(h.plan||{who:'Modd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[arg]||{}),dates:''}; S.holidays[arg].on=b.checked; rerender(); return; }
+    case 'holEdit': { const h=CAT.find(x=>x.id===arg); if(!S.holidays[arg])S.holidays[arg]={on:false,...(h.plan||{who:'Modd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[arg]||{}),dates:''}; UI.openHol=UI.openHol===arg?null:arg; render(); return; }
+    case 'addVac': { const id=uid(); const s=addD(todayT(),S.vacations.notice||30); S.vacations.list.push({id,who:'M',s:ymd(s),sh:'10:00',e:ymd(addD(s,7)),eh:'10:00',note:''}); UI.openVac=id; rerender(); return; }
+    case 'vacEdit': UI.openVac=UI.openVac===arg?null:arg; render(); return;
+    case 'rmVac': S.vacations.list.splice(+arg,1); rerender(); return;
+    case 'addCustom': S.customs.push({name:'Custom period',who:'M',dates:'',pri:3}); rerender(); return;
+    case 'rmCustom': S.customs.splice(+arg,1); rerender(); return;
+    case 'addChange': { const id=uid(); const t=todayT(); if(arg==='give')S.changes.push({id,kind:'give',who:'M',s:ymd(t),sh:'10:00',e:ymd(addD(t,1)),eh:'10:00',note:''}); else { const nx=RESULT&&RESULT.exchanges.find(x=>x.t>nowT()); const xt=nx?nx.t:t; S.changes.push({id,kind:'move',date:ymd(xt),time:hm(xt),newDate:ymd(xt),newTime:hm(xt),note:''}); } UI.openChg=id; rerender(); return; }
+    case 'chgEdit': UI.openChg=UI.openChg===arg?null:arg; render(); return;
+    case 'rmChange': S.changes.splice(+arg,1); rerender(); return;
+    case 'copyLink': { const u=shareLink(); try{await navigator.clipboard.writeText(u); $('saveMsg').textContent='Link copied.';}catch(err){ const i=$('shareUrl'); i.select(); $('saveMsg').textContent='Select the link and copy it by hand.'; } return; }
+    case 'ics': if(RESULT)saveFile('custody-calendar.ics',ics(),'text/calendar'); return;
+    case 'csv': if(RESULT)saveFile('custody-calendar.csv',csv(),'text/csv'); return;
+    case 'copyList': { if(!RESULT)return; const txt=RESULT.exchanges.map(x=>`${ymd(x.t)} ${DOWN[dow(x.t)]} ${hm(x.t)}  ${PN(x.from)} to ${PN(x.to)}  (${x.why})`).join('\n'); try{await navigator.clipboard.writeText(txt);$('saveMsg').textContent='Exchange list copied.';}catch(err){$('saveMsg').textContent='Copy failed in this browser.';} return; }
+    case 'print': go('cal'); setTimeout(()=>window.print(),100); return;
+    case 'loadPlan': { const keep={parents:S.parents,children:S.children}; STATE=planDefaults(); STATE.setupDone=true; STATE.parents=keep.parents; STATE.children=keep.children; UI.note='Parenting plan defaults loaded.'; rerender(); go('cal'); return; }
+    case 'runSetup': UI.step=1; go('setup'); return;
+    case 'stepPrev': UI.step=Math.max(1,UI.step-1); renderSetup(); window.scrollTo({top:0}); return;
+    case 'stepNext': if(UI.step===7){ S.setupDone=true; saveState(); go('cal'); } else { UI.step++; renderSetup(); window.scrollTo({top:0}); } return;
+  }
+});
+
+// ----- exports (unchanged from the earlier page) -----
 const icsDate=t=>new Date(t).toISOString().replace(/[-:]/g,'').slice(0,15);
 function ics(){
   const r=RESULT; const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//custody-calendar.com//planner//EN','CALSCALE:GREGORIAN'];
   const ev=(uid,s,e,sum,desc)=>{L.push('BEGIN:VEVENT',`UID:${uid}@custody-calendar.com`,`DTSTAMP:${icsDate(Date.now())}Z`,`DTSTART:${icsDate(s)}`,`DTEND:${icsDate(e)}`,`SUMMARY:${sum}`);if(desc)L.push(`DESCRIPTION:${desc}`);L.push('END:VEVENT');};
-  r.segs.forEach((sg,i)=>ev('blk'+i+'-'+icsDate(sg.s),sg.s,sg.e,`With ${PN[sg.p]}`,`${fmt1(sg.h/24)} days`));
-  r.exchanges.forEach((x,i)=>ev('ex'+i+'-'+icsDate(x.t),x.t,x.t+30*60000,`Exchange: ${PN[x.from]} to ${PN[x.to]}`,x.why));
+  r.segs.forEach((sg,i)=>ev('blk'+i+'-'+icsDate(sg.s),sg.s,sg.e,`With ${PN(sg.p)}`,`${fmt1(sg.h/24)} days`));
+  r.exchanges.forEach((x,i)=>ev('ex'+i+'-'+icsDate(x.t),x.t,x.t+30*60000,`Exchange: ${PN(x.from)} to ${PN(x.to)}`,x.why));
   L.push('END:VCALENDAR'); return L.join('\r\n');
 }
 const usDate=t=>{const d=new Date(t);return `${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')}/${d.getUTCFullYear()}`};
 const usTime=t=>{const d=new Date(t);let h=d.getUTCHours();const ap=h>=12?'PM':'AM';h=h%12||12;return `${h}:${String(d.getUTCMinutes()).padStart(2,'0')} ${ap}`};
 function csv(){
   const q=s=>`"${String(s).replace(/"/g,'""')}"`; const rows=[['Subject','Start Date','Start Time','End Date','End Time','All Day Event','Description']];
-  for(const sg of RESULT.segs)rows.push([`With ${PN[sg.p]}`,usDate(sg.s),usTime(sg.s),usDate(sg.e),usTime(sg.e),'False',`${fmt1(sg.h/24)} days`]);
-  for(const x of RESULT.exchanges)rows.push([`Exchange: ${PN[x.from]} to ${PN[x.to]}`,usDate(x.t),usTime(x.t),usDate(x.t),usTime(x.t+30*60000),'False',x.why]);
+  for(const sg of RESULT.segs)rows.push([`With ${PN(sg.p)}`,usDate(sg.s),usTime(sg.s),usDate(sg.e),usTime(sg.e),'False',`${fmt1(sg.h/24)} days`]);
+  for(const x of RESULT.exchanges)rows.push([`Exchange: ${PN(x.from)} to ${PN(x.to)}`,usDate(x.t),usTime(x.t),usDate(x.t),usTime(x.t+30*60000),'False',x.why]);
   return rows.map(r=>r.map(q).join(',')).join('\r\n');
 }
 function saveFile(name,text,mime){
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type:mime})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
-  $('savemsg').textContent=`Saved ${name}`;
+  const m=$('saveMsg'); if(m)m.textContent=`Saved ${name}`;
 }
-// ----- wiring -----
-buildPicker();
-if(!loadState()){ calDefaults(); ITEMS=planItems(); }
-renderItems();
-$('addItem').addEventListener('click',addFromPicker);
-$('planload').addEventListener('click',()=>{ITEMS=planItems();renderItems();$('saved').textContent='Parenting plan schedule loaded. Press "Build the calendar".';});
-$('clearAll').addEventListener('click',()=>{ITEMS=[];renderItems();});
-$('schedCards').addEventListener('change',onItemChange); $('items').addEventListener('change',onItemChange);
-$('schedCards').addEventListener('click',onItemClick); $('items').addEventListener('click',onItemClick);
-$('run').addEventListener('click',run);
-$('reset').addEventListener('click',()=>{calDefaults();ITEMS=planItems();renderItems();run();});
-$('ics').addEventListener('click',()=>{if(!RESULT)run();saveFile('custody-calendar.ics',ics(),'text/calendar');});
-$('csv').addEventListener('click',()=>{if(!RESULT)run();saveFile('custody-calendar.csv',csv(),'text/csv');});
-$('copy').addEventListener('click',async()=>{if(!RESULT)run();const txt=RESULT.exchanges.map(x=>`${ymd(x.t)} ${DOWN[dow(x.t)]} ${hm(x.t)}  ${PN[x.from]} to ${PN[x.to]}  (${x.why})`).join('\n');try{await navigator.clipboard.writeText(txt);$('savemsg').textContent='Exchange list copied.';}catch(e){$('savemsg').textContent='Copy failed; select the table and copy by hand.';}});
-$('print').addEventListener('click',()=>window.print());
-run();
+
+// ----- start -----
+loadState();
+{ const d=new Date(); UI.cur={y:d.getFullYear(),m:d.getMonth()+1}; UI.sel=ymd(todayT()); }
+rebuild();
+if(!STATE.setupDone){ UI.step=1; go('setup'); } else go('cal');
 </script>
 </body>
 </html>
