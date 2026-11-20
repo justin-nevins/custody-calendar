@@ -152,8 +152,8 @@ function computeSchedule(c){
   //   ends, are owed to that parent and are paid at the first regular hours of the other parent that follow, so the
   //   parent's block is extended and the other parent's next block starts later. Days lost by both parents offset each
   //   other before anything is paid. Make-up hours carry src -2.
-  // Vacations, custom periods and one-time changes never count. The local schedule is never changed.
-  const makeup=c.makeup==='shift', fixed=c.makeup==='fixed'; let shiftH=0, shiftTotal=0, segStart=0, curSeg=0; const countsForMakeup=p=>!p.kind;
+  // Vacations count only when c.makeupVac is set. Custom periods and one-time changes never count. The local schedule is never changed.
+  const makeup=c.makeup==='shift', fixed=c.makeup==='fixed'; let shiftH=0, shiftTotal=0, segStart=0, curSeg=0; const countsForMakeup=p=>!p.kind||(p.kind==='vacation'&&!!c.makeupVac);
   const owed=[0,0,0]; let segOwed=[0,0,0]; let madeH=0, owedTotal=0;
   const closeSeg=()=>{
     if(makeup){ const lostH=shiftH-segStart; const snapped=Math.round(lostH/24)*24; shiftH=segStart+snapped; shiftTotal+=snapped/24; }
@@ -273,7 +273,7 @@ function configFrom(S,withChanges,base){
   for(const b of Object.values(birthdays))b.who=resolveWho(b.who,S);
   for(const cu of customs)cu.who=resolveWho(cu.who,S);
   const begins=S.regular.on?S.phase.begins:'never';
-  return {start:S.cal.start,years:S.cal.years,limit:S.cal.limit,mode:S.cal.mode,makeup:S.cal.makeup||'none',
+  return {start:S.cal.start,years:S.cal.years,limit:S.cal.limit,mode:S.cal.mode,makeup:S.cal.makeup||'none',makeupVac:!!S.cal.makeupVac,
     pattern:String(S.regular.pattern||'').split(/[,\s/-]+/).filter(Boolean),first:resolveWho(S.regular.first,S),xtime:S.regular.xtime||'12:00',
     begins,move:S.phase.move||null,movePre:+S.phase.movePre||0,ldDate:S.phase.ldDate||null,ldEnd:S.phase.ldEnd||null,weeklyOn:!!S.phase.weeklyOn,weekly:(S.phase.weekly.rows||[]).map(r=>({...r,parent:resolveWho(r.parent,S)})),weeksPerCycle:+S.phase.weeksPerCycle||2,weekAnchor:S.phase.weekAnchor,
     holidays,birthdays,customs,names,

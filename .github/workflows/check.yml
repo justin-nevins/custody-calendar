@@ -41,6 +41,19 @@ jobs:
             if(!(shift.shiftDays>0)) { console.error("shift mode shifted nothing"); process.exit(1); }
             console.log("make-up modes ok: made", fixed.madeDays, "days; shift", shift.shiftDays, "days");
           '
+      - name: Vacations count toward make-up when set
+        run: |
+          node -e '
+            const E=require("./engine.js");
+            const st=(makeup,makeupVac)=>({v:5,parents:{M:{role:"mother"},F:{role:"father"}},children:[],pbd:{M:{},F:{}},regular:{on:true,pattern:"21,11",first:"mother",xtime:"12:00"},phase:{begins:"start",weeklyOn:true,weekAnchor:"2026-12-28",weeksPerCycle:2,weekly:{rows:E.WEEKLY_PLAN}},holidays:{},customs:[],vacations:{list:[{id:"v1",who:"F",s:"2027-01-05",sh:"10:00",e:"2027-01-12",eh:"10:00",applies:"both"}]},changes:[],cal:{start:"2027-01-02",years:1,limit:21,mode:"none",makeup,makeupVac}});
+            const off=E.build(st("fixed",false)).result, on=E.build(st("fixed",true)).result, shiftOn=E.build(st("shift",true)).result, noneOn=E.build(st("none",true)).result;
+            if(off.madeDays!==0){ console.error("vacation made up while the setting is off", off.madeDays); process.exit(1); }
+            if(!(on.madeDays>=7)){ console.error("vacation not made up with the setting on", on.madeDays); process.exit(1); }
+            if(!on.exchanges.some(x=>x.kind==="makeup")){ console.error("no make-up exchange"); process.exit(1); }
+            if(!(shiftOn.shiftDays>=7)){ console.error("shift mode ignored the vacation", shiftOn.shiftDays); process.exit(1); }
+            if(noneOn.madeDays!==0||noneOn.shiftDays!==0){ console.error("make-up off still made up days"); process.exit(1); }
+            console.log("vacation make-up ok: made", on.madeDays, "days; shift", shiftOn.shiftDays, "days");
+          '
       - name: Exchange rules
         run: |
           node -e '
