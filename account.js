@@ -246,7 +246,7 @@ const ACC = (() => {
   function signinHtml() {
     return `<div class="acct"><div class="card"><span class="eyebrow">Sign in</span><h2>Sign in with your email</h2><p class="muted">No password. We email you a link that signs you in on this device.</p>
       <form class="row" data-acct-form="signin"><input type="email" name="email" required autocomplete="email" placeholder="you@example.com" autofocus style="flex:1;min-width:220px"><button class="btn primary" type="submit">Email me a sign-in link</button></form>
-      <p class="small muted">The calendar works without an account. An account adds: the same calendar on both parents' phones, changes that the other parent approves before they apply, a record of who changed what and when, and a shared calendar URL's calendar app.</p></div>
+      <p class="small muted">The calendar works without an account. An account adds: the same calendar on both parents' phones, changes that the other parent approves before they apply, a record of who changed what and when, and a shared calendar URL for your calendar app.</p></div>
       <div class="card"><h3>What happens after the first sign-in</h3><ol class="small muted" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px"><li>Say which parent you are. The calendar set up in this browser becomes the shared calendar.</li><li>Give the other parent a code. They sign in with their own email, enter the code and confirm the schedule as it stands.</li><li>From then on, a change either parent makes is a proposal the other approves.</li></ol></div></div>`;
   }
   function codeHtml() {
