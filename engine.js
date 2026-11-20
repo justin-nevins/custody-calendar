@@ -173,6 +173,20 @@ function computeSchedule(c){
     else { par[i]=regular; }
   }
   if((makeup||fixed)&&curSeg>0)closeSeg();
+  // Exchange time rules (c.xrules, each {applies, days, dates, time}): a regular exchange that matches a rule moves to
+  // the rule's time on the same day. The parent whose time was ending keeps the hours up to a later time; the parent
+  // whose time is starting takes the hours back from an earlier time. Holiday, make-up and limit boundaries are not moved.
+  const xrules=(c.xrules||[]).map(r=>({...r,h:parseHours(r.time),ranges:parsePeriods(r.dates||'')})).filter(r=>r.time);
+  if(xrules.length){
+    const bounds=[]; for(let i=1;i<N;i++){ if(par[i]!==par[i-1]&&src[i]===0&&src[i-1]===0)bounds.push(i); }
+    for(const i of bounds){
+      const t=t0+i*HOUR; const loc=inWeekly(t);
+      const rule=xrules.find(r=>ruleMatches(r,t,loc)); if(!rule)continue;
+      const h=new Date(t).getUTCHours(); const j=i-h+rule.h; if(j===i||j<0||j>=N)continue;
+      if(j>i){ const p=par[i-1]; for(let k=i;k<j;k++){ if(src[k]!==0)break; par[k]=p; } }
+      else { const p=par[i]; for(let k=i-1;k>=j;k--){ if(src[k]!==0)break; par[k]=p; } }
+    }
+  }
   const limitH=(+c.limit||21)*24; let movedH=0;
   if(c.mode==='cap'){
     let i=0;
@@ -227,6 +241,27 @@ function computeSchedule(c){
 // S is the saved settings object (v5). names: parent names come from S.parents. withChanges: include one-time changes
 // (they need the base calendar, so the caller passes the result computed without them as `base`).
 const parentName=(S,k)=>slotName(S,k);
+// Exchange rules: S.xrules = [{applies:'both'|'ld'|'local', days:{0..6:true}, dates:'period list', placeKind:'none'|
+// 'ending'|'starting'|'text', place:'', time:'HH:MM' or ''}]. The first matching rule with a place sets the place; the
+// first matching rule with a time sets the time (the engine moves the exchange). A rule with no days and no dates
+// matches every exchange under the schedule it applies to.
+function ruleMatches(r,t,loc){
+  if(r.applies==='ld'&&loc)return false; if(r.applies==='local'&&!loc)return false;
+  const days=r.days||{}; const anyDay=Object.values(days).some(Boolean); if(anyDay&&!days[dow(t)])return false;
+  const ranges=r.ranges||parsePeriods(r.dates||''); if(ranges.length&&!ranges.some(([a,b])=>t>=a&&t<b))return false;
+  return true;
+}
+// The place of an exchange x in result r under settings S, as text ('' when none).
+function exchangePlace(S,r,x){
+  const loc=r&&r.inLocal?r.inLocal(x.t):false; const PN=k=>slotName(S,k);
+  for(const rule of (S.xrules||[])){
+    if(!rule.placeKind||rule.placeKind==='none')continue; if(!ruleMatches(rule,x.t,loc))continue;
+    if(rule.placeKind==='ending')return `${PN(x.from)}'s home`; if(rule.placeKind==='starting')return `${PN(x.to)}'s home`;
+    if(rule.placeKind==='text'&&(rule.place||'').trim())return rule.place.trim();
+  }
+  if(x.kind!=='regular')return '';
+  return ((loc?S.phase.weekly.place:S.regular.place)||'').trim();
+}
 function configFrom(S,withChanges,base){
   const birthdays={}; const PN=k=>parentName(S,k);
   (S.children||[]).forEach((c,i)=>{ birthdays['child'+i]={on:!!c.on&&!!(c.md||'').trim(),name:(c.name?c.name+"'s":"Child's")+' birthday',md:c.md,who:c.who,before:c.before,after:c.after,start:c.start,end:c.end,applies:c.applies||'both'}; });
@@ -241,7 +276,8 @@ function configFrom(S,withChanges,base){
   return {start:S.cal.start,years:S.cal.years,limit:S.cal.limit,mode:S.cal.mode,makeup:S.cal.makeup||'none',
     pattern:String(S.regular.pattern||'').split(/[,\s/-]+/).filter(Boolean),first:resolveWho(S.regular.first,S),xtime:S.regular.xtime||'12:00',
     begins,move:S.phase.move||null,movePre:+S.phase.movePre||0,ldDate:S.phase.ldDate||null,ldEnd:S.phase.ldEnd||null,weeklyOn:!!S.phase.weeklyOn,weekly:(S.phase.weekly.rows||[]).map(r=>({...r,parent:resolveWho(r.parent,S)})),weeksPerCycle:+S.phase.weeksPerCycle||2,weekAnchor:S.phase.weekAnchor,
-    holidays,birthdays,customs,names};
+    holidays,birthdays,customs,names,
+    xrules:(S.xrules||[]).filter(r=>r&&r.time).map(r=>({applies:r.applies||'both',days:r.days||{},dates:r.dates||'',time:r.time}))};
 }
 // A one-time change becomes a short period with priority 0. 'move': an exchange at old date/time happens at a new
 // date/time instead. 'give': a period goes to one parent. `base` is the schedule computed without changes.
@@ -301,9 +337,9 @@ function icsText(r,names,opts={}){
   const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//custody-calendar.com//planner//EN','CALSCALE:GREGORIAN'];
   if(opts.name)L.push('X-WR-CALNAME:'+icsEsc(opts.name),'NAME:'+icsEsc(opts.name));
   if(opts.refresh)L.push('REFRESH-INTERVAL;VALUE=DURATION:'+opts.refresh,'X-PUBLISHED-TTL:'+opts.refresh);
-  const ev=(uid,s,e,sum,desc)=>{L.push('BEGIN:VEVENT',`UID:${uid}@custody-calendar.com`,`DTSTAMP:${stamp}`,`DTSTART:${icsDate(s)}`,`DTEND:${icsDate(e)}`,`SUMMARY:${icsEsc(sum)}`);if(desc)L.push(`DESCRIPTION:${icsEsc(desc)}`);L.push('END:VEVENT');};
+  const ev=(uid,s,e,sum,desc,loc)=>{L.push('BEGIN:VEVENT',`UID:${uid}@custody-calendar.com`,`DTSTAMP:${stamp}`,`DTSTART:${icsDate(s)}`,`DTEND:${icsDate(e)}`,`SUMMARY:${icsEsc(sum)}`);if(desc)L.push(`DESCRIPTION:${icsEsc(desc)}`);if(loc)L.push(`LOCATION:${icsEsc(loc)}`);L.push('END:VEVENT');};
   r.segs.forEach((sg,i)=>ev('blk'+i+'-'+icsDate(sg.s),sg.s,sg.e,`With ${PN(sg.p)}`,`${fmt1(sg.h/24)} days`));
-  r.exchanges.forEach((x,i)=>ev('ex'+i+'-'+icsDate(x.t),x.t,x.t+30*60000,`Exchange: ${PN(x.from)} to ${PN(x.to)}`,x.why));
+  r.exchanges.forEach((x,i)=>ev('ex'+i+'-'+icsDate(x.t),x.t,x.t+30*60000,`Exchange: ${PN(x.from)} to ${PN(x.to)}`,x.why,opts.S?exchangePlace(opts.S,r,x):''));
   L.push('END:VCALENDAR'); return L.join('\r\n');
 }
 // Days whose owner differs between two results (used to mark a proposal on the calendar).
@@ -311,5 +347,5 @@ function diffDays(a,b){ const out=[]; const keys=new Set([...Object.keys(a.days)
 // Exchanges in b that are not in a, and in a not in b.
 function diffExchanges(a,b){ const key=x=>`${x.t}|${x.from}|${x.to}`; const A=new Set(a.exchanges.map(key)), B=new Set(b.exchanges.map(key)); return {added:b.exchanges.filter(x=>!A.has(key(x))),removed:a.exchanges.filter(x=>!B.has(key(x)))}; }
 
-return {HOUR,DAYMS,utc,addD,ymd,hm,usd,usdStr,DOWN,dow,parseDate,parseHours,nth,last,monBefore,monOnOrBefore,easter,fixed,CAT,PLANSET,WEEKLY_PLAN,ROLE_TOKENS,roles,resolveWho,slotName,entryName,whoFor,parsePeriods,periodsFor,computeSchedule,configFrom,changePeriod,build,applyProposal,diffSettings,stable,icsText,diffDays,diffExchanges};
+return {HOUR,DAYMS,utc,addD,ymd,hm,usd,usdStr,DOWN,dow,parseDate,parseHours,nth,last,monBefore,monOnOrBefore,easter,fixed,CAT,PLANSET,WEEKLY_PLAN,ROLE_TOKENS,roles,resolveWho,slotName,entryName,whoFor,parsePeriods,periodsFor,computeSchedule,configFrom,changePeriod,build,ruleMatches,exchangePlace,applyProposal,diffSettings,stable,icsText,diffDays,diffExchanges};
 });

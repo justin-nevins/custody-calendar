@@ -192,7 +192,7 @@ routerAdd("GET", "/api/cc/feed/{token}", (e) => {
   const s = jget(fam, "settings");
   const E = engine();
   const { result } = E.build(s);
-  const text = E.icsText(result, { M: parentName(s, "M"), F: parentName(s, "F") }, { name: "Custody Calendar", refresh: "PT6H" });
+  const text = E.icsText(result, { M: parentName(s, "M"), F: parentName(s, "F") }, { name: "Custody Calendar", refresh: "PT6H", S: s });
   e.response.header().set("Content-Type", "text/calendar; charset=utf-8");
   e.response.header().set("Cache-Control", "no-store");
   e.response.header().set("Content-Disposition", 'inline; filename="custody-calendar.ics"');
@@ -236,7 +236,7 @@ routerAdd("GET", "/api/cc/cal/{id}", (e) => {
   try { const last = rec.getString("fetched"); if (!last || Date.now() - new Date(last).getTime() > 86400000) { rec.set("fetched", new Date().toISOString()); $app.save(rec); } } catch (_) {}
   const E = engine();
   const { result } = E.build(s);
-  const text = E.icsText(result, { M: parentName(s, "M"), F: parentName(s, "F") }, { name: "Custody Calendar", refresh: "PT6H" });
+  const text = E.icsText(result, { M: parentName(s, "M"), F: parentName(s, "F") }, { name: "Custody Calendar", refresh: "PT6H", S: s });
   e.response.header().set("Content-Type", "text/calendar; charset=utf-8");
   e.response.header().set("Cache-Control", "no-store");
   e.response.header().set("Content-Disposition", 'inline; filename="custody-calendar.ics"');

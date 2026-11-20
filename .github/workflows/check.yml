@@ -41,6 +41,19 @@ jobs:
             if(!(shift.shiftDays>0)) { console.error("shift mode shifted nothing"); process.exit(1); }
             console.log("make-up modes ok: made", fixed.madeDays, "days; shift", shift.shiftDays, "days");
           '
+      - name: Exchange rules
+        run: |
+          node -e '
+            const E=require("./engine.js");
+            const base=()=>({v:5,parents:{M:{role:"mother",name:"A"},F:{role:"father",name:"J"}},children:[],pbd:{M:{},F:{}},regular:{on:true,pattern:"21,11",first:"mother",xtime:"12:00",place:"airport"},phase:{begins:"start",weeklyOn:true,weekAnchor:"2026-12-28",weeksPerCycle:2,weekly:{rows:E.WEEKLY_PLAN,place:"school"}},holidays:{thanksus:{on:true,who:"Modd",before:3,after:4,start:"10:00",end:"10:00"}},customs:[],vacations:{list:[]},changes:[],xrules:[],cal:{start:"2027-01-02",years:2,limit:21,mode:"none",makeup:"none"}});
+            const r0=E.build(base()).result; const s1=base(); s1.xrules=[{applies:"ld",days:{0:true},dates:"",placeKind:"ending",place:"",time:"18:00"}]; const r1=E.build(s1).result;
+            const a=r0.exchanges.filter(x=>x.kind==="regular"), b=r1.exchanges.filter(x=>x.kind==="regular");
+            if(a.length!==b.length){ console.error("exchange count changed"); process.exit(1); }
+            let moved=0; for(let k=0;k<a.length;k++){ const sun=new Date(a[k].t).getUTCDay()===0; const h=new Date(b[k].t).getUTCHours(); if(h!==(sun?18:12)){ console.error("wrong hour at "+new Date(b[k].t).toISOString()); process.exit(1); } if(a[k].t!==b[k].t)moved++; const pl=E.exchangePlace(s1,r1,b[k]); if(pl!==(sun?(b[k].from==="M"?"A":"J")+"\x27s home":"airport")){ console.error("wrong place "+pl); process.exit(1); } }
+            if(!moved){ console.error("no exchange moved"); process.exit(1); }
+            const ics=E.icsText(r1,{M:"A",F:"J"},{name:"t",S:s1}); if(!/^LOCATION:/m.test(ics)){ console.error("no LOCATION in ics"); process.exit(1); }
+            console.log("exchange rules ok:", moved, "exchanges moved to 18:00 on Sundays");
+          '
       - name: HTML parses
         run: |
           python3 - <<'PY'

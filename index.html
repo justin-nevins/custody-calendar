@@ -360,7 +360,7 @@ function planDefaults(){
     phase:{begins:'move',move:'',movePre:5,ldDate:'',ldEnd:'',weeklyOn:true,weekAnchor:'2026-12-28',weeksPerCycle:2,weekly:{rows:WEEKLY_PLAN.map(r=>({...r})),place:''}},
     holidays, customs:[],
     vacations:{allow:{M:14,F:14},notice:30,maxLen:14,list:[]},
-    changes:[],
+    changes:[], xrules:[],
     cal:{start:startYm,years:3,limit:21,mode:'cap',makeup:'none'}};
 }
 function migrateOld(){
@@ -385,7 +385,7 @@ function loadState(){
   const m=migrateOld(); if(m){STATE=m; UI.note='Your earlier settings were carried over.'; saveState(); return;}
   STATE=planDefaults();
 }
-function upgradeState(s){ if(!s.cal.makeup)s.cal.makeup='none'; for(const k of ['M','F']){ if(!s.parents[k].role)s.parents[k].role=k==='M'?'mother':'father'; } if(s.phase.ldEnd==null)s.phase.ldEnd=''; if(!s.phase.weeksPerCycle)s.phase.weeksPerCycle=2; for(const [id,h] of Object.entries(s.holidays)){ if(!h.applies){ const c=CAT.find(x=>x.id===id); h.applies=c&&c.sameCity?'local':'both'; } } return s; }
+function upgradeState(s){ if(!s.cal.makeup)s.cal.makeup='none'; if(!Array.isArray(s.xrules))s.xrules=[]; for(const k of ['M','F']){ if(!s.parents[k].role)s.parents[k].role=k==='M'?'mother':'father'; } if(s.phase.ldEnd==null)s.phase.ldEnd=''; if(!s.phase.weeksPerCycle)s.phase.weeksPerCycle=2; for(const [id,h] of Object.entries(s.holidays)){ if(!h.applies){ const c=CAT.find(x=>x.id===id); h.applies=c&&c.sameCity?'local':'both'; } } return s; }
 function saveState(){ try{localStorage.setItem('cc5',JSON.stringify(STATE));}catch(e){} }
 function shareLink(){ const s=btoa(unescape(encodeURIComponent(JSON.stringify(STATE)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); return location.origin+location.pathname+'#s='+s; }
 
@@ -419,6 +419,7 @@ function regularText(){ const r=STATE.regular; if(!r.on)return 'not used'; const
 function phaseText(){ const p=STATE.phase; const ret=p.ldEnd&&STATE.regular.on&&p.weeklyOn?`; local again from ${fDY(parseDate(p.ldEnd))}`:''; if(!STATE.regular.on)return p.weeklyOn?'Local schedule only':'No schedule in force'; if(!p.weeklyOn&&p.begins!=='start')return 'Long distance schedule only (local schedule off)'; if(p.begins==='start')return 'Long distance from the calendar start'+ret; if(p.begins==='date')return p.ldDate?`Local until ${fDY(parseDate(p.ldDate))}, then long distance${ret}`:'Long distance start date missing'; if(!p.move)return 'Move date not entered: local schedule shows'; return `Local until ${p.movePre} days before the move (${fDY(parseDate(p.move))}), then long distance${ret}`; }
 function localText(){ const p=STATE.phase; if(!p.weeklyOn)return 'not used'; const n=p.weekly.rows.length; return `${p.weeksPerCycle||2}-week cycle, ${n} period${n===1?'':'s'}, Week A from ${p.weekAnchor?usdStr(p.weekAnchor):'(no date)'}`; }
 const APPLIES=[['both','Both schedules'],['ld','Long distance schedule only'],['local','Local schedule only']];
+function xruleText(r){ const days=Object.entries(r.days||{}).filter(([k,v])=>v).map(([k])=>DOWN[+k]); const when=[days.length?days.join(', '):'', (r.dates||'').trim()?'on the dates listed':''].filter(Boolean).join(' ')||'every exchange'; const what=[r.placeKind==='ending'?"at the home of the parent whose time is ending":r.placeKind==='starting'?"at the home of the parent whose time is starting":r.placeKind==='text'&&(r.place||'').trim()?`at ${r.place.trim()}`:'', r.time?`at ${r.time}`:''].filter(Boolean).join(', ')||'no change'; const ap=r.applies==='ld'?' (long distance)':r.applies==='local'?' (local)':''; return `${when}${ap}: ${what}${r.note?` · ${r.note}`:''}`; }
 const appliesText=a=>a==='ld'?'long distance only':a==='local'?'local only':'';
 const appliesTag=a=>a&&a!=='both'?` <span class="pill">${appliesText(a)}</span>`:'';
 function vacUsed(who,y){ let n=0; for(const v of STATE.vacations.list){ if(v.who!==who||!v.s||!v.e)continue; const s=parseDate(v.s); if(s===null||new Date(s).getUTCFullYear()!==y)continue; const e=parseDate(v.e); n+=Math.max(0,(e+parseHours(v.eh)*HOUR-s-parseHours(v.sh)*HOUR)/DAYMS); } return n; }
@@ -510,7 +511,7 @@ function renderPanel(){
    </div>
    <p class="notice">A change made from here applies to this date only. The regular schedule is not touched.</p>`;
 }
-function exchangePlace(x){ const pl=(x.why==='local schedule')?STATE.phase.weekly.place:STATE.regular.place; return pl&&x.kind==='regular'?` At ${esc(pl)}.`:''; }
+function exchangePlace(x){ const pl=RESULT?CCEngine.exchangePlace(STATE,RESULT,x):''; return pl?` At ${esc(pl)}.`:''; }
 function renderAgenda(){
   const el=$('agenda'); if(!RESULT){el.innerHTML='';return;} const now=nowT();
   const list=UI.agendaAll?RESULT.exchanges:RESULT.exchanges.filter(x=>x.t>=now-DAYMS).slice(0,60);
@@ -536,6 +537,7 @@ const SECTIONS=[
  {id:'people',t:'Parents and children',s:()=>`${PN(resolveWho('mother'))} (Mother, Parent ${resolveWho('mother')==='M'?1:2}), ${PN(resolveWho('father'))} (Father, Parent ${resolveWho('father')==='M'?1:2})${STATE.children.filter(c=>c.on&&c.md).map(c=>` · ${c.name||'child'} (${c.md})`).join('')}`},
  {id:'regular',t:'Long Distance Schedule',s:()=>regularText()},
  {id:'local',t:'Local Schedule',s:()=>localText()},
+ {id:'xch',t:'Exchanges',s:()=>`${(STATE.xrules||[]).length} rule${(STATE.xrules||[]).length===1?'':'s'} for place or time`},
  {id:'hol',t:'Holidays and birthdays',s:()=>`${Object.values(STATE.holidays).filter(h=>h.on).length} holidays selected`},
  {id:'vac',t:'Vacations',s:()=>`${STATE.vacations.allow.M} / ${STATE.vacations.allow.F} days a year · ${STATE.vacations.list.length} planned`},
  {id:'changes',t:'One-time changes',s:()=>`${STATE.changes.length} change${STATE.changes.length===1?'':'s'}`},
@@ -567,6 +569,7 @@ function secHtml(id){
     ${chk('regular.on','Use the long distance schedule')}
     <div class="tpl">${Object.entries(PRESETS).map(([k,p])=>`<button type="button" aria-pressed="${S.regular.preset===k}" data-act="preset" data-arg="${k}"><span class="bar">${[...p.bar].map(c=>`<i class="${c}"></i>`).join('')}</span><span class="nm">${esc(p.nm)}</span><span class="ds">${esc(p.ds)}</span></button>`).join('')}</div>
     ${(()=>{ const pat=String(S.regular.pattern||'').split(/[,\s/-]+/).filter(Boolean); while(pat.length<2)pat.push(''); return `<div class="form">${pat.map((n,i)=>fld(`Days with ${esc(PN(i%2===0?'M':'F'))}${pat.length>2?` (block ${i+1})`:''}`,`<span class="row" style="gap:6px"><input type="number" min="1" max="60" data-act="patBlock" data-arg="${i}" value="${esc(n)}" style="flex:1">${pat.length>2?`<button class="btn sm danger" data-act="rmBlock" data-arg="${i}" aria-label="Remove block ${i+1}">×</button>`:''}</span>`)).join('')}${fld('First block goes to',sel('regular.first',[['M',PN('M')],['F',PN('F')]]))}${fld('Exchange time',inp('regular.xtime',{type:'time'}))}${fld('Usual exchange place (optional)',inp('regular.place',{ph:'School, airport, ...'}))}</div>
+    <p class="help">A different place or time on certain days of the week or dates is set under Exchanges.</p>
     <div class="row"><button class="btn sm" data-act="addBlock">+ Add a block (for patterns like 2-2-3)</button><span class="small muted">Blocks repeat in this order: ${pat.map((n,i)=>`${n||'?'} with ${esc(PN(i%2===0?'M':'F'))}`).join(', ')}, then again.</span></div>`; })()}
     <h3>When it is in force</h3>
     <div class="form">${fld('The long distance schedule begins',sel('phase.begins',[['move','A number of days before a move date'],['date','On a date'],['start','At the calendar start (local schedule not used before it)']]))}
@@ -575,15 +578,26 @@ function secHtml(id){
     <div class="notice">${esc(regularText())}. ${esc(phaseText())}${RESULT&&RESULT.ldStart!==null?`. Long distance begins ${fDT(RESULT.ldStart)}`:''}${RESULT&&RESULT.ldEnd!==null?`; local resumes ${fDT(RESULT.ldEnd)} (set under Local Schedule)`:''}.</div>
     ${stripHtml()}
     <details class="help"><summary>How the first day is counted</summary><p>The first block starts at the exchange time on the day the pattern begins, with the parent in "First block goes to". Blocks are counted in whole days from that time.</p></details>`;
-  case 'local': { const p=S.phase; const wpc=+p.weeksPerCycle||2; const WK=[[1,'Week A'],[2,'Week B'],[3,'Week C'],[4,'Week D']].slice(0,wpc); return `<div class="head"><div><h2>Local Schedule</h2><p class="muted">The weekly schedule used while the parents live in the same place. Each row gives one parent a period; the other parent has all the time not listed. It is in force until the long distance schedule begins (set under Long Distance Schedule), and again from the date below if the parents live in the same place again.</p></div></div>
+  case 'local': { const p=S.phase; const wpc=+p.weeksPerCycle||2; const WK=[[1,'Week A'],[2,'Week B'],[3,'Week C'],[4,'Week D']].slice(0,wpc); return `<div class="head"><div><h2>Local Schedule</h2><p class="muted">The weekly schedule used while the parents live in the same community. Each row gives one parent a period; the other parent has all the time not listed. It is in force until the long distance schedule begins (set under Long Distance Schedule), and again from the date below if the parents live in the same community again.</p></div></div>
     ${chk('phase.weeklyOn','Use the local schedule')}
     <div class="form">${fld('Weeks in the cycle',sel('phase.weeksPerCycle',[[1,'1 (every week the same)'],[2,'2 (Week A, Week B)'],[3,'3'],[4,'4']],{num:true}))}${fld('Week A starts on (a Monday, or the Monday before this date)',inp('phase.weekAnchor',{type:'date'}))}${fld('Usual exchange place (optional)',inp('phase.weekly.place',{ph:'School, home, ...'}))}</div>
+    <p class="help">A different place or time on certain days of the week or dates is set under Exchanges.</p>
     <div class="wrows">${p.weekly.rows.map((r,i)=>`<div class="wrow">${fld('Week',sel(`phase.weekly.rows.${i}.week`,WK,{num:true}))}${fld('Parent',sel(`phase.weekly.rows.${i}.parent`,[['F',PN('F')],['M',PN('M')]]))}${fld('From',sel(`phase.weekly.rows.${i}.sd`,DOWN.map((d,n)=>[n,d]),{num:true}))}${fld('at',inp(`phase.weekly.rows.${i}.st`,{type:'time'}))}${fld('To',sel(`phase.weekly.rows.${i}.ed`,DOWN.map((d,n)=>[n,d]),{num:true}))}${fld('at',inp(`phase.weekly.rows.${i}.et`,{type:'time'}))}<button class="btn sm danger" data-act="rmRow" data-arg="${i}">Remove</button></div>`).join('')}</div>
     <button class="btn sm" style="align-self:flex-start" data-act="addRow">+ Add a period</button>
     <h3>When it is in force</h3>
     <div class="form">${fld('Local schedule resumes on (optional, after a return)',inp('phase.ldEnd',{type:'date'}))}</div>
     <div class="notice">${esc(localText())}. ${esc(phaseText())}. Weeks are counted from the Week A date and keep counting through a long distance phase, so the same week letter returns after a return to local.</div>
     ${stripHtml()}`; }
+  case 'xch': { const rules=S.xrules||[]; const PK=[['none','No change of place'],['ending',"Home of the parent whose time is ending"],['starting',"Home of the parent whose time is starting"],['text','A place I name']];
+    return `<div class="head"><div><h2>Exchanges</h2><p class="muted">Where and when exchanges happen when the usual place or time does not apply. A rule can name days of the week, dates, or both, and can set a place, a time, or both. Rules are read from the top; the first rule that matches sets the place, and the first rule that matches with a time sets the time.</p></div></div>
+    <div class="list">${rules.length?rules.map((r,i)=>`<div class="item open"><span class="pill">${i+1}</span><div><b>${esc(xruleText(r))}</b>
+      <div class="sub"><div class="form tight">${fld('Applies under',sel(`xrules.${i}.applies`,APPLIES))}${fld('Place',sel(`xrules.${i}.placeKind`,PK))}${r.placeKind==='text'?fld('Place name',inp(`xrules.${i}.place`,{ph:'School, the airport, ...'})):''}${fld('Time (leave empty to keep the usual time)',inp(`xrules.${i}.time`,{type:'time'}))}${fld('Note (optional)',inp(`xrules.${i}.note`,{ph:'Skating nights'}))}</div>
+      <div class="field"><span class="lbl">On these days of the week (none ticked = every day)</span><span class="row">${DOWN.map((d,n)=>`<label class="check"><input type="checkbox" data-b="xrules.${i}.days.${n}" data-t="bool"${r.days&&r.days[n]?' checked':''}> ${d}</label>`).join('')}</span></div>
+      <div class="form tight">${fld('On these dates (optional)',inp(`xrules.${i}.dates`,{ph:'06-15-2027 00:00 to 08-31-2027 24:00; 12-20-2027 ...'}))}</div>
+      <p class="help">Dates are MM-DD-YYYY with a time; several periods are separated by semicolons. With both days and dates, the exchange must fall on one of the days and inside one of the periods.</p></div></div>
+      <span class="row"><button class="btn sm" data-act="upXrule" data-arg="${i}"${i===0?' disabled':''}>Up</button><button class="btn sm danger" data-act="rmXrule" data-arg="${i}">Remove</button></span></div>`).join(''):'<p class="small muted">No rules. Every exchange uses the usual place and time of the schedule in force.</p>'}</div>
+    <button class="btn sm" style="align-self:flex-start" data-act="addXrule">+ Add a rule</button>
+    <div class="notice">The usual exchange time and place are set under Long Distance Schedule and Local Schedule. A time rule moves the exchange on that day: the parent whose time is ending keeps the child until the later time, or hands over earlier. Holiday, make-up and day-limit exchanges keep their own times. Places show in the exchange list, the day panel and the calendar file.</div>`; }
   case 'hol': { const groups=[['Parenting plan periods',CAT.filter(h=>h.region==='Plan')],['United States and Canada',CAT.filter(h=>h.region==='Both')],['United States',CAT.filter(h=>h.region==='US')],['Canada',CAT.filter(h=>h.region==='Canada')]];
     return `<div class="head"><div><h2>Holidays and birthdays</h2><p class="muted">Tick what your plan covers. Each row shows the dates it produces for this year and next, so the setting can be checked against the plan without reading the rule.</p></div></div>
     ${groups.map(([g,list])=>`<h3>${g}</h3><div class="list">${list.map(h=>{ const cfg=S.holidays[h.id]||{on:false,...(h.plan||{who:'motherOdd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[h.id]||{}),dates:'',applies:h.sameCity?'local':'both'}; const open=UI.openHol===h.id; return `<div class="item${open?' open':''}"><input type="checkbox" data-act="holOn" data-arg="${h.id}"${cfg.on?' checked':''} aria-label="${esc(hName(h))}"><div><b>${esc(hName(h))}</b>${appliesTag(cfg.applies)} <span class="small muted">· ${esc(h.ruleText)} · ${esc(whoText(cfg.who))}</span>${cfg.on?`<div class="res">${esc(holRowText(h,cfg))}</div>`:''}</div><button class="btn sm" data-act="holEdit" data-arg="${h.id}">${open?'Close':'Edit'}</button>
@@ -635,6 +649,7 @@ function reviewHtml(){ const S=STATE; const hol=Object.entries(S.holidays).filte
    <dt><a href="#" data-step="1">Children</a></dt><dd>${S.children.filter(c=>c.on).map(c=>`${esc(c.name||'child')}, birthday ${esc(c.md||'not set')}`).join('; ')||'none'}</dd>
    <dt><a href="#" data-step="2">Long distance</a></dt><dd>${esc(regularText())}</dd>
    <dt><a href="#" data-step="3">Local</a></dt><dd>${esc(localText())}</dd>
+   <dt>Exchanges</dt><dd>${(S.xrules||[]).length?(S.xrules||[]).map(r=>esc(xruleText(r))).join('; '):'usual place and time'}</dd>
    <dt><a href="#" data-step="2">In force</a></dt><dd>${esc(phaseText())}</dd>
    <dt><a href="#" data-step="4">Holidays</a></dt><dd>${hol.length} selected: ${esc(hol.join(', '))}</dd>
    <dt><a href="#" data-step="5">Vacations</a></dt><dd>${S.vacations.allow.M} and ${S.vacations.allow.F} days a year, ${S.vacations.notice} days notice, ${S.vacations.list.length} planned</dd>
@@ -691,6 +706,9 @@ document.addEventListener('click',async e=>{
     case 'addBlock': { const pat=patArr(); pat.push('2'); if(pat.length%2===1)pat.push('2'); S.regular.pattern=pat.join(','); S.regular.preset='custom'; rerender(); return; }
     case 'rmBlock': { const pat=patArr(); pat.splice(+arg,1); if(pat.length%2===1&&pat.length>2)pat.pop(); S.regular.pattern=pat.join(','); S.regular.preset='custom'; rerender(); return; }
     case 'addRow': S.phase.weekly.rows.push({week:1,parent:'father',sd:5,st:'17:00',ed:0,et:'17:00'}); rerender(); return;
+    case 'addXrule': S.xrules.push({id:'x'+Date.now().toString(36),applies:'both',days:{},dates:'',placeKind:'none',place:'',time:'',note:''}); rerender(); return;
+    case 'rmXrule': S.xrules.splice(+arg,1); rerender(); return;
+    case 'upXrule': { const i=+arg; if(i>0){ const r=S.xrules.splice(i,1)[0]; S.xrules.splice(i-1,0,r); } rerender(); return; }
     case 'rmRow': S.phase.weekly.rows.splice(+arg,1); rerender(); return;
     case 'holOn': { const h=CAT.find(x=>x.id===arg); if(!S.holidays[arg])S.holidays[arg]={on:false,...(h.plan||{who:'motherOdd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[arg]||{}),dates:'',applies:h.sameCity?'local':'both'}; S.holidays[arg].on=b.checked; rerender(); return; }
     case 'holEdit': { const h=CAT.find(x=>x.id===arg); if(!S.holidays[arg])S.holidays[arg]={on:false,...(h.plan||{who:'motherOdd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[arg]||{}),dates:'',applies:h.sameCity?'local':'both'}; UI.openHol=UI.openHol===arg?null:arg; render(); return; }
@@ -717,7 +735,7 @@ document.addEventListener('click',async e=>{
 });
 
 // ----- exports (unchanged from the earlier page) -----
-function ics(){ return CCEngine.icsText(RESULT,{M:PN('M'),F:PN('F')},{name:'Custody Calendar'}); }
+function ics(){ return CCEngine.icsText(RESULT,{M:PN('M'),F:PN('F')},{name:'Custody Calendar',S:STATE}); }
 const usDate=t=>{const d=new Date(t);return `${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')}/${d.getUTCFullYear()}`};
 const usTime=t=>{const d=new Date(t);let h=d.getUTCHours();const ap=h>=12?'PM':'AM';h=h%12||12;return `${h}:${String(d.getUTCMinutes()).padStart(2,'0')} ${ap}`};
 function csv(){
