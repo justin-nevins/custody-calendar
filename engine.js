@@ -24,7 +24,18 @@ const last=(y,m,wd)=>{let t=utc(y,m+1,0);const off=(dow(t)-wd+7)%7;return addD(t
 const monBefore=(y,m,d)=>{let t=utc(y,m,d);const off=(dow(t)+6)%7;return addD(t,-(off===0?7:off))};
 const monOnOrBefore=t=>addD(t,-((dow(t)+6)%7));
 const easter=y=>{const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1;return utc(y,mo,da)};
-const fixed=(m,d)=>y=>utc(y,m,d);
+const fixed=(m,d)=>{ const f=y=>utc(y,m,d); f.md=[m,d]; return f; };
+// Month-day text ("MM-DD") to [m,d], or null.
+const parseMd=s=>{ const m=/^\s*(\d{1,2})[-\/](\d{1,2})\s*$/.exec(s||''); if(!m)return null; const mo=+m[1],d=+m[2]; return (mo>=1&&mo<=12&&d>=1&&d<=31&&mkDate(2028,mo,d)!==null)?[mo,d]:null; };
+const mdText=t=>{const d=new Date(t);return `${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`};
+// A year in which the anchor date exists: y itself, or the next leap year when the anchor is February 29.
+const mdYear=(md,y)=>{ for(let k=0;k<8;k++){ if(mkDate(y+k,md[0],md[1])!==null)return y+k; } return y; };
+// First and last day of a fixed-date period in year y, from its days before and after: {s,e} day stamps.
+function fixedSpan(md,cfg,y){ const Y=mdYear(md,y); const a=utc(Y,md[0],md[1]); return {s:addD(a,-(+cfg.before||0)),e:addD(a,(+cfg.after||0))}; }
+// Days before (which='start') or after (which='end') the anchor for a typed month-day, counted in year y;
+// a date on the other side of the year boundary counts forward into the next year (December 28 to January 2 = 5).
+// null when the text is not a month-day.
+function daysFromMd(md,text,which,y){ const v=parseMd(text); if(!v)return null; const Y=mdYear(md,y); const a=utc(Y,md[0],md[1]); const t=mkDate(Y,v[0],v[1])!==null?utc(Y,v[0],v[1]):utc(mdYear(v,Y),v[0],v[1]); let n=Math.round((which==='start'?a-t:t-a)/DAYMS); if(n<0){ const yl=Math.round((utc(Y+1,1,1)-utc(Y,1,1))/DAYMS); n+=yl; } return n; }
 
 // Holiday catalog. pri: 1 birthdays / Mother's Day / Father's Day, 2 Thanksgiving and Christmas, 3 vacation periods, 4 other days. 0 = one-time changes (strongest).
 const CAT=[
@@ -416,5 +427,5 @@ function diffDays(a,b){ const out=[]; const keys=new Set([...Object.keys(a.days)
 // Exchanges in b that are not in a, and in a not in b.
 function diffExchanges(a,b){ const key=x=>`${x.t}|${x.from}|${x.to}`; const A=new Set(a.exchanges.map(key)), B=new Set(b.exchanges.map(key)); return {added:b.exchanges.filter(x=>!A.has(key(x))),removed:a.exchanges.filter(x=>!B.has(key(x)))}; }
 
-return {HOUR,DAYMS,utc,addD,ymd,hm,usd,usdStr,DOWN,dow,parseDate,parseHours,nth,last,monBefore,monOnOrBefore,easter,fixed,CAT,PLANSET,WEEKLY_PLAN,ROLE_TOKENS,roles,resolveWho,slotName,entryName,whoFor,parsePeriods,periodsFor,computeSchedule,configFrom,changePeriod,changePeriods,changeHours,changeSummary,ofwText,build,ruleMatches,exchangePlace,parentColor,CAL_COLORS,applyProposal,diffSettings,stable,icsText,diffDays,diffExchanges};
+return {HOUR,DAYMS,utc,addD,ymd,hm,usd,usdStr,DOWN,dow,parseDate,parseHours,nth,last,monBefore,monOnOrBefore,easter,fixed,parseMd,mdText,fixedSpan,daysFromMd,CAT,PLANSET,WEEKLY_PLAN,ROLE_TOKENS,roles,resolveWho,slotName,entryName,whoFor,parsePeriods,periodsFor,computeSchedule,configFrom,changePeriod,changePeriods,changeHours,changeSummary,ofwText,build,ruleMatches,exchangePlace,parentColor,CAL_COLORS,applyProposal,diffSettings,stable,icsText,diffDays,diffExchanges};
 });

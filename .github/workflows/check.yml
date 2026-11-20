@@ -27,6 +27,25 @@ jobs:
           for f in server/pb_hooks/*.js server/pb_migrations/*.js; do node --check "$f"; done
       - name: Engine runs
         run: node -e 'const E=require("./engine.js"); const r=E.build({v:5,parents:{M:{role:"mother"},F:{role:"father"}},children:[],pbd:{M:{},F:{}},regular:{on:true,pattern:"21,11",first:"father",xtime:"12:00"},phase:{begins:"start",weeklyOn:true,weekAnchor:"2026-12-28",weeksPerCycle:2,weekly:{rows:E.WEEKLY_PLAN}},holidays:{},customs:[],vacations:{list:[]},changes:[],cal:{start:"2026-12-01",years:2,limit:21,mode:"cap"}}); if(r.result.exchanges.length<5)process.exit(1); console.log("engine ok", r.result.exchanges.length, "exchanges")'
+      - name: Fixed-date spans
+        run: |
+          node -e '
+            const E=require("./engine.js"); const Y=2026;
+            const t=(a,b,m)=>{ if(JSON.stringify(a)!==JSON.stringify(b)){ console.error("FAIL",m,a,b); process.exit(1);} };
+            t(E.CAT.find(h=>h.id==="prexmas").rule.md,[12,18],"fixed rule carries its month-day");
+            t(E.CAT.find(h=>h.id==="thanksus").rule.md,undefined,"rule-based holiday has none");
+            const sp=E.fixedSpan([12,18],{before:0,after:5},Y); t([E.mdText(sp.s),E.mdText(sp.e)],["12-18","12-23"],"Pre-Christmas span");
+            const ny=E.fixedSpan([12,28],{before:0,after:5},Y); t([E.mdText(ny.s),E.mdText(ny.e)],["12-28","01-02"],"New Year span crosses the year");
+            t(E.daysFromMd([12,18],"12-22","end",Y),4,"end date to days after");
+            t(E.daysFromMd([12,18],"12-17","start",Y),1,"start date to days before");
+            t(E.daysFromMd([12,28],"01-02","end",Y),5,"January end counts into the next year");
+            t(E.daysFromMd([1,1],"12-30","start",Y),2,"December start counts from the previous year");
+            t(E.daysFromMd([12,18],"12/20","end",Y),2,"slash form");
+            t(E.daysFromMd([12,18],"nope","end",Y),null,"text that is not a date");
+            t(E.daysFromMd([12,18],"02-30","end",Y),null,"day that does not exist");
+            t(E.daysFromMd([2,29],"03-01","end",2026),1,"February 29 anchor uses a leap year");
+            console.log("fixed-date spans ok");
+          '
       - name: Make-up modes
         run: |
           node -e '
