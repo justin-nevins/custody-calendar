@@ -135,19 +135,8 @@ routerAdd("POST", "/api/cc/confirm", (e) => {
 }, $apis.requireAuth("users"));
 
 // ---- propose a change ----
-// An answer-by date from the client: YYYY-MM-DD, today or later (UTC), within 400 days. Returns PocketBase's
-// datetime text or "" when none was given.
-function parseAnswerBy(v) {
-  const s = String(v || "").trim(); if (!s) return "";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) throw new BadRequestError("The answer-by date must be YYYY-MM-DD.");
-  const d = Date.parse(s + "T00:00:00Z"); const today = Date.parse(new Date().toISOString().slice(0, 10) + "T00:00:00Z");
-  if (isNaN(d) || d < today) throw new BadRequestError("The answer-by date is in the past.");
-  if (d - today > 400 * 86400000) throw new BadRequestError("The answer-by date is more than 400 days away.");
-  return s + " 00:00:00.000Z";
-}
-
 routerAdd("POST", "/api/cc/proposals", (e) => {
-  const { jget, engine, bad, emailOk, body, newCode, freshCode, allMembersOf, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView, viewerOf, requireParent, viewerText } = require(`${__hooks}/cc_lib.js`);
+  const { jget, engine, bad, emailOk, body, newCode, freshCode, allMembersOf, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView, viewerOf, requireParent, viewerText, parseAnswerBy } = require(`${__hooks}/cc_lib.js`);
     const me = requireParent($app, e.auth.id);
   const b = body(e);
   const kind = String(b.kind || "");
@@ -202,7 +191,7 @@ routerAdd("POST", "/api/cc/proposals/{id}/withdraw", (e) => require(`${__hooks}/
 
 // ---- counter-offer: the deciding parent answers an open proposal with a different one ----
 routerAdd("POST", "/api/cc/proposals/{id}/counter", (e) => {
-  const { jget, bad, body, parentName, membersOf, userEmail, applyProposal, addEvent, sendMail, familyView, requireParent } = require(`${__hooks}/cc_lib.js`);
+  const { jget, bad, body, parentName, membersOf, userEmail, applyProposal, addEvent, sendMail, familyView, requireParent, parseAnswerBy } = require(`${__hooks}/cc_lib.js`);
   const me = requireParent($app, e.auth.id);
   const id = e.request.pathValue("id");
   let p = null;

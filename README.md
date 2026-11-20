@@ -13,6 +13,11 @@ Everything runs in the browser. Nothing is uploaded.
 - Hosting: a DigitalOcean droplet. Caddy serves the page from `/var/www/custody-calendar` and proxies `/api/` and `/_/` to PocketBase on the same host. A merge to `main` runs `.github/workflows/deploy.yml`, which copies the page and the server code over SSH and restarts PocketBase.
 - Parents are two slots (M and F in the data) with a role each: mother, father or parent. Plan defaults are written in role words and resolved through the roles, so either parent can be Parent 1.
 
+## Tests
+
+- CI (`.github/workflows/check.yml`) syntax-checks the page, the engine and the server code and runs engine checks for the make-up modes, exchange rules, swaps, repeats and the proposal flow.
+- `server/tests/run.sh [pocketbase-binary]` starts a throwaway PocketBase in a temp dir with the repo's migrations and hooks and runs `server/tests/e2e.mjs` against it: sign-in, family and join, proposals with answer-by dates, counter-offers, care requests, approvals, the feed. It removes the temp dir when done and never touches the live server.
+
 ## License
 
 Copyright (c) 2026 Justin Nevins. All rights reserved. The source code is published for review only. See `LICENSE`.
