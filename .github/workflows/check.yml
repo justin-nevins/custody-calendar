@@ -54,6 +54,23 @@ jobs:
             const ics=E.icsText(r1,{M:"A",F:"J"},{name:"t",S:s1}); if(!/^LOCATION:/m.test(ics)){ console.error("no LOCATION in ics"); process.exit(1); }
             console.log("exchange rules ok:", moved, "exchanges moved to 18:00 on Sundays");
           '
+      - name: Swaps, repeats and OFW text
+        run: |
+          node -e '
+            const E=require("./engine.js");
+            const base=()=>({v:5,parents:{M:{role:"mother",name:"A"},F:{role:"father",name:"J"}},children:[],pbd:{M:{},F:{}},regular:{on:true,pattern:"21,11",first:"mother",xtime:"12:00"},phase:{begins:"start",weeklyOn:true,weekAnchor:"2026-12-28",weeksPerCycle:2,weekly:{rows:E.WEEKLY_PLAN}},holidays:{},customs:[],vacations:{list:[]},changes:[],xrules:[],cal:{start:"2027-01-02",years:1,limit:21,mode:"none",makeup:"none"}});
+            const r0=E.build(base()).result;
+            const sw={id:"s1",kind:"swap",a:{who:"F",s:"2027-01-09",sh:"10:00",e:"2027-01-10",eh:"10:00"},b:{who:"M",s:"2027-01-30",sh:"10:00",e:"2027-01-31",eh:"10:00"},note:"",applies:"both",repeatUntil:""};
+            const s1=base(); s1.changes=[sw]; const r1=E.build(s1).result;
+            if(!(r1.days["2027-01-09"].f>0&&r1.days["2027-01-30"].m>0)){ console.error("swap legs not applied"); process.exit(1); }
+            if(Math.abs(r1.summary[0].fDays-r0.summary[0].fDays)>1e-6){ console.error("even swap changed the totals"); process.exit(1); }
+            const g={id:"g1",kind:"give",who:"F",s:"2027-01-05",sh:"18:00",e:"2027-01-06",eh:"08:00",repeatUntil:"2027-01-26"};
+            if(E.changePeriods(g,null).length!==4){ console.error("weekly repeat count"); process.exit(1); }
+            const s2=base(); s2.changes=[g]; const r2=E.build(s2).result; if(r2.days["2027-01-12"].f!==6){ console.error("repeat not applied"); process.exit(1); }
+            if(!E.applyProposal(base(),"change",{item:sw}).changes.length){ console.error("applyProposal swap"); process.exit(1); }
+            const t=E.ofwText(s1,sw,{from:"F",to:"M"}); if(!/Section II\.F/.test(t)||!/J asks A/.test(t)){ console.error("ofw text"); process.exit(1); }
+            console.log("swaps, repeats and OFW text ok");
+          '
       - name: HTML parses
         run: |
           python3 - <<'PY'
