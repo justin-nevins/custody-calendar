@@ -101,7 +101,7 @@ const ACC = (() => {
       else out.push({ kind: it.list === 'changes' ? 'change' : 'vacation', payload: { item: it.item }, summary: `${it.op === 'edit' ? 'Change: ' : ''}${itemText(it.list, it.item)}` });
     }
     if (d.sections.length) {
-      const names = { people: 'parents and children', regular: 'long distance schedule', local: 'local schedule', change: 'which schedule is in force', hol: 'holidays', vac: 'vacation rules', limits: 'limits and range' };
+      const names = { people: 'parents and children', regular: 'long distance schedule', local: 'local schedule', change: 'which schedule is in force', hol: 'holidays', vac: 'vacation rules', limits: 'limits and range', xch: 'exchange rules' };
       let delta = ''; try { const r0 = CCEngine.build(a).result, r1 = CCEngine.build(CCEngine.applyProposal(a, 'settings', { settings: b })).result; const dd = CCEngine.diffDays(r0, r1); delta = dd.length ? `; ${dd.length} day${dd.length === 1 ? '' : 's'} change, first ${fD(parseDate(dd[0]))}` : '; no day changes hands'; } catch (e) {}
       out.push({ kind: 'settings', payload: { settings: b }, summary: `Settings: ${d.sections.map((k) => names[k]).join(', ')}${delta}` });
     }
