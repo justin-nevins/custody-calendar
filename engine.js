@@ -268,7 +268,7 @@ function configFrom(S,withChanges,base){
   for(const k of ['M','F']){ const b=(S.pbd||{})[k]||{}; birthdays['p'+k]={on:!!b.on&&!!(b.md||'').trim(),name:PN(k)+"'s birthday",md:b.md,who:k,before:b.before,after:b.after,start:b.start,end:b.end,applies:b.applies||'both'}; }
   const customs=(S.customs||[]).map(c=>({...c,kind:'custom'}));
   for(const v of ((S.vacations||{}).list||[])){ if(!v.s||!v.e)continue; customs.push({name:v.note?`${PN(v.who)}'s vacation: ${v.note}`:`${PN(v.who)}'s vacation`,who:v.who,dates:`${v.s} ${v.sh||'10:00'} to ${v.e} ${v.eh||'10:00'}`,pri:3,kind:'vacation',applies:v.applies||'both'}); }
-  if(withChanges) for(const ch of (S.changes||[])){ const p=changePeriod(ch,base); if(p) customs.push({name:ch.note||'One-time change',who:p.who,dates:`${ymd(p.s)} ${hm(p.s)} to ${ymd(p.e)} ${hm(p.e)}`,pri:0,kind:'change',applies:ch.applies||'both'}); }
+  if(withChanges) for(const ch of (S.changes||[])){ for(const p of changePeriods(ch,base)) customs.push({name:ch.note||(ch.kind==='swap'?'Swap':'One-time change'),who:p.who,dates:`${ymd(p.s)} ${hm(p.s)} to ${ymd(p.e)} ${hm(p.e)}`,pri:0,kind:'change',applies:ch.applies||'both'}); }
   const holidays={}, names={}; for(const [id,h] of Object.entries(S.holidays||{})) if(h&&h.on){ holidays[id]={...h,on:true,who:resolveWho(h.who,S)}; const cat=CAT.find(x=>x.id===id); if(cat)names[id]=entryName(cat,S); }
   for(const b of Object.values(birthdays))b.who=resolveWho(b.who,S);
   for(const cu of customs)cu.who=resolveWho(cu.who,S);
@@ -281,12 +281,67 @@ function configFrom(S,withChanges,base){
 }
 // A one-time change becomes a short period with priority 0. 'move': an exchange at old date/time happens at a new
 // date/time instead. 'give': a period goes to one parent. `base` is the schedule computed without changes.
-function changePeriod(ch,base){
-  if(ch.kind==='give'){ const s=parseDate(ch.s), e=parseDate(ch.e); if(s===null||e===null)return null; const S=s+parseHours(ch.sh)*HOUR, E=e+parseHours(ch.eh)*HOUR; return E>S?{s:S,e:E,who:ch.who}:null; }
+// shift: whole days added to every date of the change (used for weekly repeats).
+function changePeriod(ch,base,shift){
+  const sh=(shift||0)*DAYMS;
+  if(ch.kind==='give'){ const s=parseDate(ch.s), e=parseDate(ch.e); if(s===null||e===null)return null; const S=s+sh+parseHours(ch.sh)*HOUR, E=e+sh+parseHours(ch.eh)*HOUR; return E>S?{s:S,e:E,who:ch.who}:null; }
+  if(ch.kind==='swap')return null; // two legs: see changePeriods
   const od=parseDate(ch.date), nd=parseDate(ch.newDate||ch.date); if(od===null||nd===null)return null;
-  const o=od+parseHours(ch.time)*HOUR, n=nd+parseHours(ch.newTime)*HOUR; if(o===n)return null;
+  const o=od+sh+parseHours(ch.time)*HOUR, n=nd+sh+parseHours(ch.newTime)*HOUR; if(o===n)return null;
   const x=base&&base.exchanges.find(x=>x.t===o); if(!x)return null;
   return n>o?{s:o,e:n,who:x.from}:{s:n,e:o,who:x.to};
+}
+// A swap has two legs: leg a goes to one parent, leg b to the other. Each leg is a give.
+const swapLeg=(ch,k)=>{ const L=(ch&&ch[k])||{}; return {kind:'give',who:L.who,s:L.s,sh:L.sh,e:L.e,eh:L.eh}; };
+// Every period a change produces: one for a give or move, two for a swap, and every weekly repeat up to
+// ch.repeatUntil (a date; occurrences whose first date is after it are not produced). A repeated move whose base
+// exchange does not exist on a later week is skipped for that week.
+function changePeriods(ch,base){
+  const out=[]; const until=parseDate(ch.repeatUntil||''); const first=parseDate(ch.kind==='move'?ch.date:ch.kind==='swap'?(ch.a&&ch.a.s):ch.s);
+  const weeks=(until!==null&&first!==null&&until>=first)?Math.min(104,Math.floor((until-first)/(7*DAYMS))):0;
+  for(let w=0;w<=weeks;w++){ const shift=w*7;
+    if(ch.kind==='swap'){ for(const k of ['a','b']){ const p=changePeriod(swapLeg(ch,k),base,shift); if(p)out.push({...p,leg:k}); } }
+    else { const p=changePeriod(ch,base,shift); if(p)out.push(p); }
+  }
+  return out;
+}
+// Hours each parent gains from a change (positive) over one occurrence, ignoring what the base calendar already
+// gave them; used for the swap balance line. Returns {M,F}.
+function changeHours(ch){
+  const h={M:0,F:0}; const legs=ch.kind==='swap'?[swapLeg(ch,'a'),swapLeg(ch,'b')]:ch.kind==='give'?[ch]:[];
+  for(const L of legs){ const s=parseDate(L.s), e=parseDate(L.e); if(s===null||e===null||!L.who)continue; const n=((e+parseHours(L.eh)*HOUR)-(s+parseHours(L.sh)*HOUR))/HOUR; if(n>0)h[L.who]=(h[L.who]||0)+n; }
+  return h;
+}
+function hoursText(n){ return n>=24&&n%24===0?`${n/24} day${n===24?'':'s'}`:n>=24?`${fmt1(n/24)} days`:`${fmt1(n)} hour${n===1?'':'s'}`; }
+// One-line text of a change, with MM-DD-YYYY dates; shared by the page, the account layer and the OFW text.
+function changeSummary(S,ch){
+  const PN=k=>slotName(S,k); const d=(x,t)=>`${usdStr(x)} ${t||''}`.trim();
+  let s;
+  if(ch.kind==='give')s=`${PN(ch.who)} has ${d(ch.s,ch.sh)} to ${d(ch.e,ch.eh)}`;
+  else if(ch.kind==='swap'){ const a=ch.a||{}, b=ch.b||{}; const h=changeHours(ch); const diff=(h.M||0)-(h.F||0);
+    s=`${PN(a.who)} has ${d(a.s,a.sh)} to ${d(a.e,a.eh)}; in return ${PN(b.who)} has ${d(b.s,b.sh)} to ${d(b.e,b.eh)} (${diff===0?'even trade':`${PN(diff>0?'M':'F')} gains ${hoursText(Math.abs(diff))}`})`; }
+  else s=`exchange of ${d(ch.date,ch.time)} happens ${d(ch.newDate||ch.date,ch.newTime)} instead`;
+  if(ch.repeatUntil)s+=`; repeats weekly until ${usdStr(ch.repeatUntil)}`;
+  return s;
+}
+// Text to paste into OFW for a change request or an answer (the plan requires requests between the parents through
+// OFW). opts: {from, to: slot keys or names, answer:'approve'|'decline'|'counter'|'withdraw', note, answerBy}.
+function ofwText(S,ch,opts={}){
+  const PN=k=>(k==='M'||k==='F')?slotName(S,k):(k||'');
+  const L=[];
+  const what=changeSummary(S,ch); const kindName=ch.kind==='swap'?'Swap of parenting time':ch.kind==='move'?'Moved exchange':'Parenting time given';
+  if(opts.answer){
+    const verb=opts.answer==='approve'?'agrees to':opts.answer==='decline'?'does not agree to':opts.answer==='counter'?'proposes instead of':'withdraws';
+    L.push(`Re: ${kindName} (Parenting Plan, Section II.F, Schedule Changes)`,'',`${PN(opts.from)||'I'} ${verb} the request: ${what}.`);
+    if(opts.answer==='counter'&&opts.counter)L.push(`Proposed instead: ${changeSummary(S,opts.counter)}.`);
+  } else {
+    L.push(`Request: ${kindName} (Parenting Plan, Section II.F, Schedule Changes)`,'',`${PN(opts.from)||'I'} ask${PN(opts.from)?'s':''} ${PN(opts.to)||'the other parent'} to agree to this one-time change: ${what}.`);
+    L.push('The regular schedule is not changed. Holiday, vacation and special-day periods stay as they are.');
+    if(opts.answerBy)L.push(`An answer by ${usdStr(opts.answerBy)} would help with planning.`);
+  }
+  if(opts.note||ch.note)L.push(`Reason: ${opts.note||ch.note}.`);
+  if(!opts.answer)L.push('Please answer through OFW. Thank you.');
+  return L.join('\n');
 }
 // Both calendars from one settings object: base (no one-time changes) and result (with them).
 function build(S){ const base=computeSchedule(configFrom(S,false,null)); const result=computeSchedule(configFrom(S,true,base)); return {base,result}; }
@@ -347,5 +402,5 @@ function diffDays(a,b){ const out=[]; const keys=new Set([...Object.keys(a.days)
 // Exchanges in b that are not in a, and in a not in b.
 function diffExchanges(a,b){ const key=x=>`${x.t}|${x.from}|${x.to}`; const A=new Set(a.exchanges.map(key)), B=new Set(b.exchanges.map(key)); return {added:b.exchanges.filter(x=>!A.has(key(x))),removed:a.exchanges.filter(x=>!B.has(key(x)))}; }
 
-return {HOUR,DAYMS,utc,addD,ymd,hm,usd,usdStr,DOWN,dow,parseDate,parseHours,nth,last,monBefore,monOnOrBefore,easter,fixed,CAT,PLANSET,WEEKLY_PLAN,ROLE_TOKENS,roles,resolveWho,slotName,entryName,whoFor,parsePeriods,periodsFor,computeSchedule,configFrom,changePeriod,build,ruleMatches,exchangePlace,applyProposal,diffSettings,stable,icsText,diffDays,diffExchanges};
+return {HOUR,DAYMS,utc,addD,ymd,hm,usd,usdStr,DOWN,dow,parseDate,parseHours,nth,last,monBefore,monOnOrBefore,easter,fixed,CAT,PLANSET,WEEKLY_PLAN,ROLE_TOKENS,roles,resolveWho,slotName,entryName,whoFor,parsePeriods,periodsFor,computeSchedule,configFrom,changePeriod,changePeriods,changeHours,changeSummary,ofwText,build,ruleMatches,exchangePlace,applyProposal,diffSettings,stable,icsText,diffDays,diffExchanges};
 });

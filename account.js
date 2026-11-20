@@ -111,10 +111,7 @@ const ACC = (() => {
     if (list === 'changes') return `${item.note ? item.note + ': ' : ''}${changeTextFor(item)}`;
     return `${roleName(item.who)}'s vacation ${usdStr(item.s)} ${item.sh || ''} to ${usdStr(item.e)} ${item.eh || ''}${item.note ? ' (' + item.note + ')' : ''}`;
   }
-  function changeTextFor(ch) {
-    if (ch.kind === 'give') return `${roleName(ch.who)} has ${usdStr(ch.s)} ${ch.sh} to ${usdStr(ch.e)} ${ch.eh}`;
-    return `exchange of ${usdStr(ch.date)} ${ch.time} happens ${usdStr(ch.newDate || ch.date)} ${ch.newTime} instead`;
-  }
+  function changeTextFor(ch) { return CCEngine.changeSummary(A.approved || STATE, ch); }
   async function sendDraft(note) {
     const list = draftProposals(); if (!list.length) return;
     for (const p of list) { const d = await api('POST', '/api/cc/proposals', Object.assign({ note: note || '' }, p)); A.me = Object.assign({ user: A.me.user }, d); }
