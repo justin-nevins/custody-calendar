@@ -1,0 +1,42 @@
+name: deploy
+on:
+  push:
+    branches: [main]
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inline script syntax
+        run: |
+          node -e '
+            const fs = require("fs");
+            const html = fs.readFileSync("index.html", "utf8");
+            const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+            if (!scripts.length) { console.error("no inline script found"); process.exit(1); }
+            fs.writeFileSync("/tmp/inline.js", scripts.join("\n"));
+          '
+          node --check /tmp/inline.js
+          for f in server/pb_hooks/*.pb.js; do node --check "$f"; done
+          for f in server/pb_migrations/*.js; do node --check "$f"; done
+      - name: SSH key
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          echo '[165.232.128.237]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILNPmHG7vGe6jVVPiwW7/YxImi902zpfyVJmU3y+aHw7' > ~/.ssh/known_hosts
+      - name: Copy the page and the server code
+        run: |
+          SSH="ssh -i ~/.ssh/deploy -p 2222 -o StrictHostKeyChecking=yes"
+          rsync -az --delete -e "$SSH" --include='index.html' --include='engine.js' --include='account.js' --exclude='*' ./ deploy@165.232.128.237:/var/www/custody-calendar/
+          rsync -az --delete -e "$SSH" server/pb_migrations/ deploy@165.232.128.237:/opt/pocketbase/pb_migrations/
+          rsync -az --delete -e "$SSH" server/pb_hooks/ deploy@165.232.128.237:/opt/pocketbase/pb_hooks/
+          rsync -az -e "$SSH" engine.js deploy@165.232.128.237:/opt/pocketbase/pb_hooks/engine.js
+          $SSH deploy@165.232.128.237 'sudo /usr/bin/systemctl restart pocketbase'
+      - name: Verify
+        run: |
+          sleep 4
+          test "$(curl -s -o /dev/null -w '%{http_code}' https://custody-calendar.com/api/health)" = 200
+          curl -s https://custody-calendar.com/ | grep -q '<title>'

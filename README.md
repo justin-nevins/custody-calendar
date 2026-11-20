@@ -6,7 +6,12 @@ Enter the cycle (days with each parent, who starts, the start date or the moving
 
 Everything runs in the browser. Nothing is uploaded.
 
-The site is a single file, `index.html`, served by GitHub Pages from `main`.
+## How it is built and served
+
+- `index.html` is the page. `engine.js` is the schedule engine, shared with the server so both compute the same calendar.
+- `server/pb_migrations` and `server/pb_hooks` are the PocketBase schema and routes for parent accounts (sign-in by email link, linking the other parent, proposals and approvals, the record, a private calendar feed).
+- Hosting: a DigitalOcean droplet. Caddy serves the page from `/var/www/custody-calendar` and proxies `/api/` and `/_/` to PocketBase on the same host. A merge to `main` runs `.github/workflows/deploy.yml`, which copies the page and the server code over SSH and restarts PocketBase.
+- Parents are two slots (M and F in the data) with a role each: mother, father or parent. Plan defaults are written in role words and resolved through the roles, so either parent can be Parent 1.
 
 ## License
 
