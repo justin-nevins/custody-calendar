@@ -391,10 +391,13 @@ const fmt1=n=>String(Math.round(n*10)/10);
 const CAL_COLORS={blue:{css:'steelblue',hex:'#2f6db5'},orange:{css:'chocolate',hex:'#d9772a'},green:{css:'seagreen',hex:'#2e8b57'},purple:{css:'rebeccapurple',hex:'#7a3fa5'},teal:{css:'teal',hex:'#1f8a8a'},pink:{css:'mediumvioletred',hex:'#c2457a'}};
 function parentColor(S,k){ const c=S&&S.parents&&S.parents[k]&&S.parents[k].color; return CAL_COLORS[c]||CAL_COLORS[k==='M'?'blue':'orange']; }
 // names: {M,F}. opts.name: calendar name shown by the subscribing app. opts.stamp: fixed DTSTAMP (tests).
-// opts.S: settings (exchange places, parent colors). opts.who: 'M' or 'F' gives only that parent's blocks and the
-// exchanges that hand the child to them, so each parent's time can be its own calendar with its own color.
+// opts.S: settings (exchange places, parent colors). opts.who: 'M' or 'F' gives only that parent's blocks, plus every
+// exchange (both parents are at each one), so each parent's time can be its own calendar with its own color and the
+// exchange times still show when only one calendar is loaded.
+// "Sheigh with Justin" when the settings name the child (several names joined with "and"); "With Justin" otherwise.
+function childLabel(S){ const names=((S&&S.children)||[]).map(c=>(c&&c.name||'').trim()).filter(Boolean); if(!names.length)return ''; return names.length===1?names[0]:names.slice(0,-1).join(', ')+' and '+names[names.length-1]; }
 function icsText(r,names,opts={}){
-  const PN=k=>names[k]||k; const stamp=icsDate(opts.stamp||Date.now())+'Z'; const who=opts.who==='M'||opts.who==='F'?opts.who:null;
+  const PN=k=>names[k]||k; const child=childLabel(opts.S); const withT=k=>child?`${child} with ${PN(k)}`:`With ${PN(k)}`; const stamp=icsDate(opts.stamp||Date.now())+'Z'; const who=opts.who==='M'||opts.who==='F'?opts.who:null;
   const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//custody-calendar.com//planner//EN','CALSCALE:GREGORIAN'];
   const name=opts.name?(who?`${opts.name}: ${PN(who)}'s time`:opts.name):'';
   if(name)L.push('X-WR-CALNAME:'+icsEsc(name),'NAME:'+icsEsc(name));
@@ -402,8 +405,8 @@ function icsText(r,names,opts={}){
   if(opts.refresh)L.push('REFRESH-INTERVAL;VALUE=DURATION:'+opts.refresh,'X-PUBLISHED-TTL:'+opts.refresh);
   const col=k=>opts.S?parentColor(opts.S,k).css:'';
   const ev=(uid,s,e,sum,desc,loc,color)=>{L.push('BEGIN:VEVENT',`UID:${uid}@custody-calendar.com`,`DTSTAMP:${stamp}`,`DTSTART:${icsDate(s)}`,`DTEND:${icsDate(e)}`,`SUMMARY:${icsEsc(sum)}`);if(desc)L.push(`DESCRIPTION:${icsEsc(desc)}`);if(loc)L.push(`LOCATION:${icsEsc(loc)}`);if(color)L.push(`COLOR:${color}`);L.push('END:VEVENT');};
-  r.segs.forEach((sg,i)=>{ if(who&&sg.p!==who)return; ev('blk'+i+'-'+icsDate(sg.s),sg.s,sg.e,`With ${PN(sg.p)}`,`${fmt1(sg.h/24)} days`,'',col(sg.p)); });
-  r.exchanges.forEach((x,i)=>{ if(who&&x.to!==who)return; ev('ex'+i+'-'+icsDate(x.t),x.t,x.t+30*60000,`Exchange: ${PN(x.from)} to ${PN(x.to)}`,x.why,opts.S?exchangePlace(opts.S,r,x):'',col(x.to)); });
+  r.segs.forEach((sg,i)=>{ if(who&&sg.p!==who)return; ev('blk'+i+'-'+icsDate(sg.s),sg.s,sg.e,withT(sg.p),`${fmt1(sg.h/24)} days`,'',col(sg.p)); });
+  r.exchanges.forEach((x,i)=>{ ev('ex'+i+'-'+icsDate(x.t),x.t,x.t+30*60000,`Exchange: ${PN(x.from)} to ${PN(x.to)}`,x.why,opts.S?exchangePlace(opts.S,r,x):'',col(x.to)); });
   L.push('END:VCALENDAR'); return L.join('\r\n');
 }
 // Days whose owner differs between two results (used to mark a proposal on the calendar).
