@@ -120,7 +120,7 @@ input[aria-invalid=true]{border-color:var(--warn);outline:2px solid var(--warn-s
 .sw.M{background:var(--cM-soft);border:1px solid var(--cM)} .sw.F{background:var(--cF-soft);border:1px solid var(--cF)}
 .sw.h{background:var(--holiday-soft);border:1px solid var(--holiday)} .sw.c{background:var(--change-soft);border:1px solid var(--change)}
 .sw.x{background:linear-gradient(135deg,var(--cM-soft) 50%,var(--cF-soft) 50%);border:1px solid var(--ink-3)}
-.sw.bad{border:2px solid var(--warn)} .sw.cap{border:2px dashed var(--ink-2)}
+.sw.bad{border:2px solid var(--warn)} .sw.cap{border:2px dashed var(--ink-2)} .sw.mk{border:2px double var(--ink-2)}
 .grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
 .dow{text-align:center;font-size:12px;color:var(--ink-3);font-weight:700;padding-bottom:4px}
 .day{position:relative;min-height:74px;border-radius:6px;border:1px solid var(--line);background:var(--panel);padding:5px 6px;display:flex;flex-direction:column;gap:3px;cursor:pointer;text-align:left;color:var(--ink);font:inherit}
@@ -132,7 +132,7 @@ input[aria-invalid=true]{border-color:var(--warn);outline:2px solid var(--warn-s
 .day.today{box-shadow:0 0 0 2px var(--ink) inset}
 .day[aria-current="true"]{box-shadow:0 0 0 2px var(--accent) inset}
 .day.bad{outline:2px solid var(--warn);outline-offset:-2px}
-.day.cap{outline:2px dashed var(--ink-2);outline-offset:-2px}
+.day.cap{outline:2px dashed var(--ink-2);outline-offset:-2px} .day.mk{outline:3px double var(--ink-2);outline-offset:-3px}
 .day .n{font-weight:700;font-size:13px}
 .day .ini{position:absolute;top:5px;right:7px;font-size:11px;font-weight:700;opacity:.8}
 .day .xch{font-family:var(--mono);font-size:11px;font-weight:600;background:var(--panel);color:var(--ink);border-radius:4px;padding:1px 4px;align-self:flex-start;border:1px solid var(--line);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -438,7 +438,7 @@ function renderCal(){
   if(UI.note){b+=`<div class="banner">${esc(UI.note)}</div>`; UI.note='';}
   b+=ACC.banner();
   bn.innerHTML=b;
-  $('legend').innerHTML=`<span><i class="sw M"></i>${esc(PN('M'))}</span><span><i class="sw F"></i>${esc(PN('F'))}</span><span><i class="sw x"></i>exchange day, split at the time shown</span><span><i class="sw h"></i>holiday or vacation</span><span><i class="sw c"></i>one-time change</span><span><i class="sw cap"></i>moved by the day limit</span><span><i class="sw bad"></i>over the limit</span>${ACC.propDays().size?'<span><i class="sw" style="outline:2px dashed var(--change);outline-offset:-2px"></i>proposed, not yet approved</span>':''}`;
+  $('legend').innerHTML=`<span><i class="sw M"></i>${esc(PN('M'))}</span><span><i class="sw F"></i>${esc(PN('F'))}</span><span><i class="sw x"></i>exchange day, split at the time shown</span><span><i class="sw h"></i>holiday or vacation</span><span><i class="sw c"></i>one-time change</span><span><i class="sw cap"></i>moved by the day limit</span>${STATE.cal.makeup==='fixed'?'<span><i class="sw mk"></i>make-up days</span>':''}<span><i class="sw bad"></i>over the limit</span>${ACC.propDays().size?'<span><i class="sw" style="outline:2px dashed var(--change);outline-offset:-2px"></i>proposed, not yet approved</span>':''}`;
   renderToday(); setView(UI.view); renderPanel();
 }
 function renderToday(){
@@ -455,7 +455,7 @@ function renderToday(){
    <div><span class="eyebrow">Coming up</span>${nextP?`<span class="big">${esc(nextP.name)}</span><span class="small muted"><span class="who ${nextP.who}">${esc(PN(nextP.who))}</span> · ${fDT(nextP.s)} to ${fDT(nextP.e)}</span>`:'<span class="big">no holiday in range</span>'}</div>`;
 }
 function childLabel(){ const names=STATE.children.map(c=>c.name).filter(Boolean); if(!names.length)return 'The child is'; if(names.length===1)return names[0]+' is'; return names.slice(0,-1).join(', ')+' and '+names[names.length-1]+' are'; }
-function humanWhy(x){ if(x.kind==='change')return `One-time change: ${esc(x.why.replace(/ (begins|ends)$/,''))}.`; if(x.kind==='limit')return 'Moved by the day limit rule.'; if(x.kind==='period')return esc(x.why.charAt(0).toUpperCase()+x.why.slice(1))+'.'; return x.why==='local schedule'?'Local schedule.':'Long distance schedule.'; }
+function humanWhy(x){ if(x.kind==='change')return `One-time change: ${esc(x.why.replace(/ (begins|ends)$/,''))}.`; if(x.kind==='limit')return 'Moved by the day limit rule.'; if(x.kind==='makeup')return 'Make-up days for regular time lost to a holiday or birthday.'; if(x.kind==='period')return esc(x.why.charAt(0).toUpperCase()+x.why.slice(1))+'.'; return x.why==='local schedule'?'Local schedule.':'Long distance schedule.'; }
 function dayCell(key){ const info=RESULT&&RESULT.days[key]; return info||null; }
 function renderMonth(){
   const cur=UI.cur; $('monthTitle').textContent=`${MON[cur.m-1]} ${cur.y}`;
@@ -469,13 +469,14 @@ function renderMonth(){
     if(!info){ cls+=' off'; }
     else {
       if(info.second){ cls+=' x'; style=` style="--a:var(--c${info.first}-soft);--b:var(--c${info.second}-soft)"`; } else cls+=' '+info.first;
-      if(info.bad)cls+=' bad'; if(info.cap)cls+=' cap';
+      if(info.bad)cls+=' bad'; if(info.cap)cls+=' cap'; if(info.mk)cls+=' mk';
       inner+=`<span class="ini">${info.second?PI(info.first)+'→'+PI(info.second):PI(info.first)}</span>`;
       const xs=RESULT.exchanges.filter(x=>x.t>=t&&x.t<t+DAYMS);
       for(const x of xs)inner+=`<span class="xch">${hm(x.t)} to ${PI(x.to)}</span>`;
       if(info.pname&&info.ppri>0)inner+=`<span class="band" title="${esc(info.pname)}">${esc(info.pname)}</span>`;
       if(info.chg)inner+=`<span class="band c" title="${esc(info.chg)}">${esc(info.chg)}</span>`;
       if(info.cap)inner+=`<span class="band" style="border-left-color:var(--ink-2);background:var(--panel)">moved by limit</span>`;
+      if(info.mk)inner+=`<span class="band" style="border-left-color:var(--ink-2);background:var(--panel)">make-up days</span>`;
     }
     if(ACC.propDays().has(key)){ cls+=' prop'; inner+=`<span class="band p" title="A proposal would change this day">proposed</span>`; }
     if(t===today)cls+=' today';
@@ -488,7 +489,7 @@ function renderPanel(){
   const t=parseDate(UI.sel), info=dayCell(UI.sel);
   if(!info){ el.innerHTML=`<div><span class="eyebrow">Selected day</span><h3>${fDL(t)}</h3></div><p class="muted">Outside the calendar range.</p>`; return; }
   const xs=RESULT.exchanges.filter(x=>x.t>=t&&x.t<t+DAYMS);
-  let rule; if(info.ppri===0)rule=`One-time change: ${esc(info.pname)}.`; else if(info.pname)rule=`${esc(info.pname)}: ${esc(PN(info.pwho))} has this period.${info.chg?` One-time change today: ${esc(info.chg)}.`:''}`; else if(info.cap)rule='Moved to the other parent by the day limit rule.'; else rule=RESULT.inLocal(t+12*HOUR)?'Local schedule.':`Long distance schedule: ${esc(regularText())}.`;
+  let rule; if(info.ppri===0)rule=`One-time change: ${esc(info.pname)}.`; else if(info.pname)rule=`${esc(info.pname)}: ${esc(PN(info.pwho))} has this period.${info.chg?` One-time change today: ${esc(info.chg)}.`:''}`; else if(info.cap)rule='Moved to the other parent by the day limit rule.'; else if(info.mk)rule='Make-up days: regular time lost to the other parent\'s holiday or birthday, added to the end of the block.'; else rule=RESULT.inLocal(t+12*HOUR)?'Local schedule.':`Long distance schedule: ${esc(regularText())}.`;
   if(info.bad)rule+=` <span class="warnt">Part of a stretch over the ${STATE.cal.limit}-day limit.</span>`;
   const withLine=info.second?`<span class="who ${info.first}">${esc(PN(info.first))}</span> until <span class="mono">${String(info.firstH).padStart(2,'0')}:00</span>, then <span class="who ${info.second}">${esc(PN(info.second))}</span>`:`<span class="who ${info.first}">${esc(PN(info.first))}</span> all day`;
   const inRange=RESULT.periods.filter(p=>p.s<t+DAYMS&&p.e>t&&p.pri>0).sort((a,b)=>a.pri-b.pri);
@@ -516,7 +517,7 @@ function renderAgenda(){
   $('agendaHint').textContent=UI.agendaAll?`${RESULT.exchanges.length} exchanges, ${fDY(RESULT.t0)} to ${fDY(RESULT.t1-DAYMS)}`:`Next ${list.length} exchanges from today.`;
   let html='', lastKey='';
   for(const x of list){ const d=new Date(x.t); const k=`${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`; if(k!==lastKey){lastKey=k;html+=`<div class="mh eyebrow">${k}</div>`;}
-    const pill=x.kind==='change'?`<span class="pill c">${esc(x.why.replace(/ (begins|ends)$/,''))}</span>`:x.kind==='period'?`<span class="pill h">${esc(x.why)}</span>`:x.kind==='limit'?`<span class="pill w">day limit rule</span>`:`<span class="pill">${esc(x.why)}</span>`;
+    const pill=x.kind==='change'?`<span class="pill c">${esc(x.why.replace(/ (begins|ends)$/,''))}</span>`:x.kind==='period'?`<span class="pill h">${esc(x.why)}</span>`:x.kind==='limit'?`<span class="pill w">day limit rule</span>`:x.kind==='makeup'?`<span class="pill w">${esc(x.why)}</span>`:`<span class="pill">${esc(x.why)}</span>`;
     html+=`<div class="ag${x.t<now?' past':''}"><span>${fD(x.t)}</span><span class="mono">${hm(x.t)}</span><span><span class="who ${x.from}">${esc(PN(x.from))}</span> to <span class="who ${x.to}">${esc(PN(x.to))}</span> &nbsp; ${pill}</span></div>`; }
   el.innerHTML=html||'<div class="ag"><span></span><span></span><span class="muted">No exchanges.</span></div>';
 }
@@ -538,7 +539,7 @@ const SECTIONS=[
  {id:'hol',t:'Holidays and birthdays',s:()=>`${Object.values(STATE.holidays).filter(h=>h.on).length} holidays selected`},
  {id:'vac',t:'Vacations',s:()=>`${STATE.vacations.allow.M} / ${STATE.vacations.allow.F} days a year · ${STATE.vacations.list.length} planned`},
  {id:'changes',t:'One-time changes',s:()=>`${STATE.changes.length} change${STATE.changes.length===1?'':'s'}`},
- {id:'limits',t:'Limits and range',s:()=>`${STATE.cal.limit} days${STATE.cal.makeup==='shift'?' · lost days added back':''} · from ${usdStr(STATE.cal.start)} for ${STATE.cal.years} year${STATE.cal.years>1?'s':''}`},
+ {id:'limits',t:'Limits and range',s:()=>`${STATE.cal.limit} days${STATE.cal.makeup==='shift'?' · lost days added back, cycle shifts':STATE.cal.makeup==='fixed'?' · lost days added to the block':''} · from ${usdStr(STATE.cal.start)} for ${STATE.cal.years} year${STATE.cal.years>1?'s':''}`},
  {id:'share',t:'Share and export',s:()=>'Link, .ics, .csv, print'},
 ];
 function renderSet(){ renderNav(); renderEdit(); const bn=$('setBanner'); bn.innerHTML=(ERR?`<div class="banner err">${esc(ERR)}</div>`:'')+ACC.banner(); }
@@ -603,9 +604,9 @@ function secHtml(id){
     <div class="form">${fld('Longest time away from either parent (days)',inp('cal.limit',{type:'number',num:true,min:1,max:365}))}${fld('If a holiday pushes past the limit',sel('cal.mode',[['cap','Give the other parent the extra days next to the holiday'],['none','Only mark it on the calendar']]))}${fld('Calendar starts on',inp('cal.start',{type:'date'}))}${fld('Years to cover',inp('cal.years',{type:'number',num:true,min:1,max:10}))}</div>
     <p class="help">The extra days come from the regular time next to the holiday: from the end of the stretch where it meets the other parent's next block; if the stretch ends with a holiday, from its start. The rule applies under the long distance schedule only.</p>
     <h3>Lost days</h3>
-    <div class="form">${fld("When a holiday or birthday takes days from a parent's block",sel('cal.makeup',[['none','The block simply loses them'],['shift','The lost days are added back: the whole cycle shifts later']]))}</div>
-    <p class="help">With "added back", the block clock pauses while a holiday or birthday takes time from the parent whose block it falls in, so that parent gets the same number of days after it and every later exchange moves by the days lost, rounded to whole days. Vacations, one-time changes and custom periods do not shift the cycle; the local schedule is never shifted.${r&&r.shiftDays?` In this calendar the cycle shifts ${r.shiftDays} day${r.shiftDays===1?'':'s'} in total.`:''}</p>
-    ${r?`<div class="tblbox"><table class="tbl"><thead><tr><th>Year</th><th class="num">${esc(PN('M'))} days</th><th class="num">${esc(PN('F'))} days</th><th class="num">Exchanges</th><th class="num">Longest with ${esc(PN('M'))}</th><th class="num">Longest with ${esc(PN('F'))}</th><th>Over the limit</th><th class="num">Days moved</th></tr></thead><tbody>${r.summary.map(s=>`<tr><td>${s.y}</td><td class="num">${fmt1(s.mDays)}</td><td class="num">${fmt1(s.fDays)}</td><td class="num">${s.ex}</td><td class="num">${fmt1(s.lm)}</td><td class="num">${fmt1(s.lf)}</td><td class="${s.over.length?'warnt':'okt'}">${s.over.length?s.over.length+' stretch'+(s.over.length>1?'es':''):'none'}</td><td class="num">${fmt1(s.moved)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="form">${fld("When a holiday or birthday takes days from a parent's block",sel('cal.makeup',[['none','The block simply loses them'],['fixed',"The lost days are added to the end of that parent's block: the cycle dates stay fixed"],['shift','The lost days are added back: the whole cycle shifts later']]))}</div>
+    <p class="help">With "added to the end of that parent's block", the days a holiday or birthday takes from the parent whose block it falls in are owed to that parent and come back at the end of that block, taken from the start of the other parent's next block, rounded to whole days. The cycle dates do not move. Days lost by both parents in the same cycle offset each other, and the day limit rule does not take make-up days. With "the whole cycle shifts later", the block clock pauses instead, so every later exchange moves by the days lost. Vacations, one-time changes and custom periods never count; the local schedule is never changed.${r&&r.shiftDays?` In this calendar the cycle shifts ${r.shiftDays} day${r.shiftDays===1?'':'s'} in total.`:''}${r&&r.madeDays?` In this calendar ${fmt1(r.madeDays)} day${r.madeDays===1?' is':'s are'} made up${r.owedDays?`; ${fmt1(r.owedDays)} still owed at the end of the range`:''}.`:''}</p>
+    ${r?`<div class="tblbox"><table class="tbl"><thead><tr><th>Year</th><th class="num">${esc(PN('M'))} days</th><th class="num">${esc(PN('F'))} days</th><th class="num">Exchanges</th><th class="num">Longest with ${esc(PN('M'))}</th><th class="num">Longest with ${esc(PN('F'))}</th><th>Over the limit</th><th class="num">Days moved</th><th class="num">Days made up</th></tr></thead><tbody>${r.summary.map(s=>`<tr><td>${s.y}</td><td class="num">${fmt1(s.mDays)}</td><td class="num">${fmt1(s.fDays)}</td><td class="num">${s.ex}</td><td class="num">${fmt1(s.lm)}</td><td class="num">${fmt1(s.lf)}</td><td class="${s.over.length?'warnt':'okt'}">${s.over.length?s.over.length+' stretch'+(s.over.length>1?'es':''):'none'}</td><td class="num">${fmt1(s.moved)}</td><td class="num">${fmt1(s.made||0)}</td></tr>`).join('')}</tbody></table></div>
     <p class="small muted">Days are counted in hours; an exchange day is split at the exchange time, so totals can end in a decimal.</p>
     ${r.over.length?`<div class="notice warn"><b>${r.over.length} stretch${r.over.length>1?'es':''} over ${S.cal.limit} days:</b><br>${r.over.map(sg=>`${fDT(sg.s)} to ${fDT(sg.e)}: ${fmt1(sg.h/24)} days with ${esc(PN(sg.p))}`).join('<br>')}</div>`:`<div class="notice">Nothing goes over ${S.cal.limit} days in the range.</div>`}`:''}`; }
   case 'share': return `<div class="head"><div><h2>Share and export</h2><p class="muted">${ACC.isViewer()?'You view this calendar read-only. Your dashboard has a calendar address for your calendar app; the link below carries a copy of the settings as they are now.':ACC.inFamily()?`This calendar is shared with ${esc(ACC.otherName())} through your account; the dashboard has the calendar address for your phone. The link below carries a copy only.`:'Settings stay in this browser. A link carries them to any other phone or computer. To share one live calendar with the other parent, sign in (Sign in tab).'}</p></div></div>
@@ -637,7 +638,7 @@ function reviewHtml(){ const S=STATE; const hol=Object.entries(S.holidays).filte
    <dt><a href="#" data-step="2">In force</a></dt><dd>${esc(phaseText())}</dd>
    <dt><a href="#" data-step="4">Holidays</a></dt><dd>${hol.length} selected: ${esc(hol.join(', '))}</dd>
    <dt><a href="#" data-step="5">Vacations</a></dt><dd>${S.vacations.allow.M} and ${S.vacations.allow.F} days a year, ${S.vacations.notice} days notice, ${S.vacations.list.length} planned</dd>
-   <dt><a href="#" data-step="6">Limit</a></dt><dd>${S.cal.limit} days; ${S.cal.mode==='cap'?'extra days go to the other parent':'only marked'}; ${S.cal.makeup==='shift'?'lost holiday days added back, cycle shifts':'lost holiday days not made up'}; calendar from ${esc(usdStr(S.cal.start))} for ${S.cal.years} years</dd>
+   <dt><a href="#" data-step="6">Limit</a></dt><dd>${S.cal.limit} days; ${S.cal.mode==='cap'?'extra days go to the other parent':'only marked'}; ${S.cal.makeup==='shift'?'lost holiday days added back, cycle shifts':S.cal.makeup==='fixed'?'lost holiday days added to the end of the block, cycle dates fixed':'lost holiday days not made up'}; calendar from ${esc(usdStr(S.cal.start))} for ${S.cal.years} years</dd>
   </dl></div>
   ${ERR?`<div class="notice warn">${esc(ERR)}</div>`:stripHtml()}
   <div class="notice">Your settings stay in this browser. Under Settings, Share and export, a link opens the same calendar on any other phone.</div>`; }
