@@ -145,24 +145,48 @@ function computeSchedule(c){
     const i0=Math.max(0,Math.ceil((p.s-t0)/HOUR)), i1=Math.min(N,Math.ceil((p.e-t0)/HOUR));
     for(let i=i0;i<i1;i++){ const loc=inWeekly(t0+i*HOUR); if(p.applies==='local'&&!loc)continue; if(p.applies==='ld'&&loc)continue; pp[i]=P[p.who]; ps[i]=p.idx; }
   }
-  // Make-up rule (c.makeup==='shift'): while a holiday or birthday takes an hour from the parent whose block it falls
-  // in, the block clock pauses, so the whole cycle shifts later. When that period ends, the pause is rounded to whole
-  // days, so exchanges keep their usual time. Vacations, custom periods and one-time changes do not pause the clock.
-  // The local schedule is never shifted.
-  const makeup=c.makeup==='shift'; let shiftH=0, shiftTotal=0, segStart=0, curSeg=0; const countsForMakeup=p=>!p.kind;
+  // Make-up rules for regular hours a holiday or birthday takes from the parent whose block it falls in.
+  // c.makeup==='shift': the block clock pauses while the period takes time, so the whole cycle shifts later. When that
+  //   period ends, the pause is rounded to whole days, so exchanges keep their usual time.
+  // c.makeup==='fixed': the cycle dates stay where they are. The lost hours, rounded to whole days when the period
+  //   ends, are owed to that parent and are paid at the first regular hours of the other parent that follow, so the
+  //   parent's block is extended and the other parent's next block starts later. Days lost by both parents offset each
+  //   other before anything is paid. Make-up hours carry src -2.
+  // Vacations, custom periods and one-time changes never count. The local schedule is never changed.
+  const makeup=c.makeup==='shift', fixed=c.makeup==='fixed'; let shiftH=0, shiftTotal=0, segStart=0, curSeg=0; const countsForMakeup=p=>!p.kind;
+  const owed=[0,0,0]; let segOwed=[0,0,0]; let madeH=0, owedTotal=0;
+  const closeSeg=()=>{
+    if(makeup){ const lostH=shiftH-segStart; const snapped=Math.round(lostH/24)*24; shiftH=segStart+snapped; shiftTotal+=snapped/24; }
+    if(fixed){ for(const p of [1,2]){ const snapped=Math.round(segOwed[p]/24)*24; owed[p]+=snapped; owedTotal+=snapped; } const n=Math.min(owed[1],owed[2]); owed[1]-=n; owed[2]-=n; owedTotal-=2*n; segOwed=[0,0,0]; }
+  };
   for(let i=0;i<N;i++){
     const t=t0+i*HOUR; const loc=inWeekly(t);
-    if(makeup&&ps[i]!==curSeg){ // a period segment ends: snap its pause to whole days
-      if(curSeg>0){ const lostH=shiftH-segStart; const snapped=Math.round(lostH/24)*24; shiftH=segStart+snapped; shiftTotal+=snapped/24; }
+    if((makeup||fixed)&&ps[i]!==curSeg){ // a period segment ends: snap what it took to whole days
+      if(curSeg>0)closeSeg();
       curSeg=ps[i]; segStart=shiftH;
     }
     const regular=loc?weeklyParent(t):blockParent(makeup?t-shiftH*HOUR:t);
     if(ps[i]>0){
       par[i]=pp[i]; src[i]=ps[i];
-      if(makeup&&!loc&&countsForMakeup(periods[ps[i]-1])&&pp[i]!==regular)shiftH++;
-    } else { par[i]=regular; }
+      if(!loc&&countsForMakeup(periods[ps[i]-1])&&pp[i]!==regular){ if(makeup)shiftH++; if(fixed)segOwed[regular]++; }
+    } else if(fixed&&!loc&&owed[3-regular]>0){ par[i]=3-regular; src[i]=-2; owed[3-regular]--; madeH++; }
+    else { par[i]=regular; }
   }
-  if(makeup&&curSeg>0){ const lostH=shiftH-segStart; const snapped=Math.round(lostH/24)*24; shiftH=segStart+snapped; shiftTotal+=snapped/24; }
+  if((makeup||fixed)&&curSeg>0)closeSeg();
+  // Exchange time rules (c.xrules, each {applies, days, dates, time}): a regular exchange that matches a rule moves to
+  // the rule's time on the same day. The parent whose time was ending keeps the hours up to a later time; the parent
+  // whose time is starting takes the hours back from an earlier time. Holiday, make-up and limit boundaries are not moved.
+  const xrules=(c.xrules||[]).map(r=>({...r,h:parseHours(r.time),ranges:parsePeriods(r.dates||'')})).filter(r=>r.time);
+  if(xrules.length){
+    const bounds=[]; for(let i=1;i<N;i++){ if(par[i]!==par[i-1]&&src[i]===0&&src[i-1]===0)bounds.push(i); }
+    for(const i of bounds){
+      const t=t0+i*HOUR; const loc=inWeekly(t);
+      const rule=xrules.find(r=>ruleMatches(r,t,loc)); if(!rule)continue;
+      const h=new Date(t).getUTCHours(); const j=i-h+rule.h; if(j===i||j<0||j>=N)continue;
+      if(j>i){ const p=par[i-1]; for(let k=i;k<j;k++){ if(src[k]!==0)break; par[k]=p; } }
+      else { const p=par[i]; for(let k=i-1;k>=j;k--){ if(src[k]!==0)break; par[k]=p; } }
+    }
+  }
   const limitH=(+c.limit||21)*24; let movedH=0;
   if(c.mode==='cap'){
     let i=0;
@@ -172,7 +196,7 @@ function computeSchedule(c){
       if(inWeekly(t0+s*HOUR))continue; // the local schedule is not under the rule
       let ex=e-s-limitH; if(ex<=0)continue;
       ex=Math.ceil(ex/24)*24; const other=3-p;
-      const isHol=k=>src[k]>0;
+      const isHol=k=>src[k]>0||src[k]===-2; // periods and make-up days are not taken by the limit rule
       const take=k=>{par[k]=other;src[k]=-1;ex--;movedH++};
       let j=e-1; while(ex>0&&j>=s&&!isHol(j)){take(j);j--}
       j=s; while(ex>0&&j<e&&!isHol(j)){take(j);j++}
@@ -180,43 +204,64 @@ function computeSchedule(c){
     }
   }
   const segs=[]; { let i=0; while(i<N){const p=par[i],s=i; while(i<N&&par[i]===p)i++; segs.push({p:R[p],s:t0+s*HOUR,e:t0+i*HOUR,h:i-s});} }
-  const reason=(i)=>{ const k=src[i]; if(k===-1)return 'day limit rule'; if(k>0)return periods[k-1].name; return 'regular schedule'; };
+  const reason=(i)=>{ const k=src[i]; if(k===-1)return 'day limit rule'; if(k===-2)return 'make-up days'; if(k>0)return periods[k-1].name; return 'regular schedule'; };
   const exchanges=[];
   for(let k=1;k<segs.length;k++){ const sg=segs[k]; const i=Math.round((sg.s-t0)/HOUR); const prev=segs[k-1];
     const pi=src[i]>0?periods[src[i]-1]:null, pp=src[i-1]>0?periods[src[i-1]-1]:null;
     let why, kind='regular';
     if(pp&&pp.pri===0){why=pp.name+' ends';kind='change';} else if(pi&&pi.pri===0){why=pi.name+' begins';kind='change';}
-    else if(pi){why=pi.name+' begins';kind='period';} else if(src[i]===-1){why='day limit rule';kind='limit';} else if(pp){why=pp.name+' ends';kind='period';} else if(src[i-1]===-1){why='day limit rule';kind='limit';} else why=(inWeekly(sg.s)?'local schedule':'long distance schedule');
+    else if(pi){why=pi.name+' begins';kind='period';} else if(src[i]===-1){why='day limit rule';kind='limit';} else if(src[i]===-2){why='make-up days begin';kind='makeup';} else if(pp){why=pp.name+' ends';kind='period';} else if(src[i-1]===-1){why='day limit rule';kind='limit';} else if(src[i-1]===-2){why='make-up days end';kind='makeup';} else why=(inWeekly(sg.s)?'local schedule':'long distance schedule');
     exchanges.push({t:sg.s,from:prev.p,to:sg.p,why,kind}); }
   const summary=[];
   for(let y=y0;y<y0+years;y++){
     const a=Math.max(t0,utc(y,1,1)), b=utc(y+1,1,1); const ia=Math.round((a-t0)/HOUR), ib=Math.round((b-t0)/HOUR);
-    let mh=0,fh=0,moved=0; for(let i=ia;i<ib;i++){ if(par[i]===1)mh++; else fh++; if(src[i]===-1)moved++; }
+    let mh=0,fh=0,moved=0,made=0; for(let i=ia;i<ib;i++){ if(par[i]===1)mh++; else fh++; if(src[i]===-1)moved++; if(src[i]===-2)made++; }
     const ex=exchanges.filter(x=>x.t>=a&&x.t<b).length;
     const runs=segs.filter(sg=>sg.e>a&&sg.s<b);
     const lm=Math.max(0,...runs.filter(r=>r.p==='M').map(r=>r.h)), lf=Math.max(0,...runs.filter(r=>r.p==='F').map(r=>r.h));
     const over=segs.filter(sg=>sg.h>limitH&&sg.s>=a&&sg.s<b);
-    summary.push({y,mDays:mh/24,fDays:fh/24,ex,lm:lm/24,lf:lf/24,over,moved:moved/24});
+    summary.push({y,mDays:mh/24,fDays:fh/24,ex,lm:lm/24,lf:lf/24,over,moved:moved/24,made:made/24});
   }
   const over=segs.filter(sg=>sg.h>limitH);
   const days={};
   for(let t=utc(y0,1,1);t<t1;t=addD(t,1)){
-    const i0=Math.round((t-t0)/HOUR); let m=0,f=0,hol=false,cap=false,first=null,firstH=0,second=null; const cnt={};
-    for(let k=0;k<24;k++){ const i=i0+k; if(i<0||i>=N)continue; const p=R[par[i]]; if(first===null){first=p} if(p===first&&second===null)firstH++; else if(second===null)second=p; if(p==='M')m++; else f++; if(src[i]>0){hol=true;cnt[src[i]]=(cnt[src[i]]||0)+1;} if(src[i]===-1)cap=true; }
+    const i0=Math.round((t-t0)/HOUR); let m=0,f=0,hol=false,cap=false,mk=false,first=null,firstH=0,second=null; const cnt={};
+    for(let k=0;k<24;k++){ const i=i0+k; if(i<0||i>=N)continue; const p=R[par[i]]; if(first===null){first=p} if(p===first&&second===null)firstH++; else if(second===null)second=p; if(p==='M')m++; else f++; if(src[i]>0){hol=true;cnt[src[i]]=(cnt[src[i]]||0)+1;} if(src[i]===-1)cap=true; if(src[i]===-2)mk=true; }
     if(first===null)continue;
     let pname=null,ppri=null,pwho=null,chg=null; let best=0; for(const [k,v] of Object.entries(cnt)){ const p=periods[+k-1]; if(p.pri===0)chg=p.name; if(v>best&&p.pri>0){best=v; pname=p.name; ppri=p.pri; pwho=p.who;} }
     if(!pname&&chg){pname=chg;ppri=0;}
     const bad=over.some(sg=>sg.s<t+DAYMS&&sg.e>t);
     const ex=exchanges.some(x=>x.t>=t&&x.t<t+DAYMS);
-    days[ymd(t)]={first,second,firstH,m,f,hol,cap,bad,ex,pname,ppri,pwho,chg};
+    days[ymd(t)]={first,second,firstH,m,f,hol,cap,mk,bad,ex,pname,ppri,pwho,chg};
   }
-  return {t0,t1,y0,years,segs,exchanges,summary,over,days,periods,limitH,movedH,shiftDays:shiftTotal,ldStart:(weeklyPhase&&begins!=='never')?ldStart:null,ldEnd,weeklyPhase,begins,noMove,inLocal:inWeekly};
+  return {t0,t1,y0,years,segs,exchanges,summary,over,days,periods,limitH,movedH,shiftDays:shiftTotal,madeDays:madeH/24,owedDays:(owed[1]+owed[2])/24,ldStart:(weeklyPhase&&begins!=='never')?ldStart:null,ldEnd,weeklyPhase,begins,noMove,inLocal:inWeekly};
 }
 
 // ===================== State to engine config =====================
 // S is the saved settings object (v5). names: parent names come from S.parents. withChanges: include one-time changes
 // (they need the base calendar, so the caller passes the result computed without them as `base`).
 const parentName=(S,k)=>slotName(S,k);
+// Exchange rules: S.xrules = [{applies:'both'|'ld'|'local', days:{0..6:true}, dates:'period list', placeKind:'none'|
+// 'ending'|'starting'|'text', place:'', time:'HH:MM' or ''}]. The first matching rule with a place sets the place; the
+// first matching rule with a time sets the time (the engine moves the exchange). A rule with no days and no dates
+// matches every exchange under the schedule it applies to.
+function ruleMatches(r,t,loc){
+  if(r.applies==='ld'&&loc)return false; if(r.applies==='local'&&!loc)return false;
+  const days=r.days||{}; const anyDay=Object.values(days).some(Boolean); if(anyDay&&!days[dow(t)])return false;
+  const ranges=r.ranges||parsePeriods(r.dates||''); if(ranges.length&&!ranges.some(([a,b])=>t>=a&&t<b))return false;
+  return true;
+}
+// The place of an exchange x in result r under settings S, as text ('' when none).
+function exchangePlace(S,r,x){
+  const loc=r&&r.inLocal?r.inLocal(x.t):false; const PN=k=>slotName(S,k);
+  for(const rule of (S.xrules||[])){
+    if(!rule.placeKind||rule.placeKind==='none')continue; if(!ruleMatches(rule,x.t,loc))continue;
+    if(rule.placeKind==='ending')return `${PN(x.from)}'s home`; if(rule.placeKind==='starting')return `${PN(x.to)}'s home`;
+    if(rule.placeKind==='text'&&(rule.place||'').trim())return rule.place.trim();
+  }
+  if(x.kind!=='regular')return '';
+  return ((loc?S.phase.weekly.place:S.regular.place)||'').trim();
+}
 function configFrom(S,withChanges,base){
   const birthdays={}; const PN=k=>parentName(S,k);
   (S.children||[]).forEach((c,i)=>{ birthdays['child'+i]={on:!!c.on&&!!(c.md||'').trim(),name:(c.name?c.name+"'s":"Child's")+' birthday',md:c.md,who:c.who,before:c.before,after:c.after,start:c.start,end:c.end,applies:c.applies||'both'}; });
@@ -231,7 +276,8 @@ function configFrom(S,withChanges,base){
   return {start:S.cal.start,years:S.cal.years,limit:S.cal.limit,mode:S.cal.mode,makeup:S.cal.makeup||'none',
     pattern:String(S.regular.pattern||'').split(/[,\s/-]+/).filter(Boolean),first:resolveWho(S.regular.first,S),xtime:S.regular.xtime||'12:00',
     begins,move:S.phase.move||null,movePre:+S.phase.movePre||0,ldDate:S.phase.ldDate||null,ldEnd:S.phase.ldEnd||null,weeklyOn:!!S.phase.weeklyOn,weekly:(S.phase.weekly.rows||[]).map(r=>({...r,parent:resolveWho(r.parent,S)})),weeksPerCycle:+S.phase.weeksPerCycle||2,weekAnchor:S.phase.weekAnchor,
-    holidays,birthdays,customs,names};
+    holidays,birthdays,customs,names,
+    xrules:(S.xrules||[]).filter(r=>r&&r.time).map(r=>({applies:r.applies||'both',days:r.days||{},dates:r.dates||'',time:r.time}))};
 }
 // A one-time change becomes a short period with priority 0. 'move': an exchange at old date/time happens at a new
 // date/time instead. 'give': a period goes to one parent. `base` is the schedule computed without changes.
@@ -291,9 +337,9 @@ function icsText(r,names,opts={}){
   const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//custody-calendar.com//planner//EN','CALSCALE:GREGORIAN'];
   if(opts.name)L.push('X-WR-CALNAME:'+icsEsc(opts.name),'NAME:'+icsEsc(opts.name));
   if(opts.refresh)L.push('REFRESH-INTERVAL;VALUE=DURATION:'+opts.refresh,'X-PUBLISHED-TTL:'+opts.refresh);
-  const ev=(uid,s,e,sum,desc)=>{L.push('BEGIN:VEVENT',`UID:${uid}@custody-calendar.com`,`DTSTAMP:${stamp}`,`DTSTART:${icsDate(s)}`,`DTEND:${icsDate(e)}`,`SUMMARY:${icsEsc(sum)}`);if(desc)L.push(`DESCRIPTION:${icsEsc(desc)}`);L.push('END:VEVENT');};
+  const ev=(uid,s,e,sum,desc,loc)=>{L.push('BEGIN:VEVENT',`UID:${uid}@custody-calendar.com`,`DTSTAMP:${stamp}`,`DTSTART:${icsDate(s)}`,`DTEND:${icsDate(e)}`,`SUMMARY:${icsEsc(sum)}`);if(desc)L.push(`DESCRIPTION:${icsEsc(desc)}`);if(loc)L.push(`LOCATION:${icsEsc(loc)}`);L.push('END:VEVENT');};
   r.segs.forEach((sg,i)=>ev('blk'+i+'-'+icsDate(sg.s),sg.s,sg.e,`With ${PN(sg.p)}`,`${fmt1(sg.h/24)} days`));
-  r.exchanges.forEach((x,i)=>ev('ex'+i+'-'+icsDate(x.t),x.t,x.t+30*60000,`Exchange: ${PN(x.from)} to ${PN(x.to)}`,x.why));
+  r.exchanges.forEach((x,i)=>ev('ex'+i+'-'+icsDate(x.t),x.t,x.t+30*60000,`Exchange: ${PN(x.from)} to ${PN(x.to)}`,x.why,opts.S?exchangePlace(opts.S,r,x):''));
   L.push('END:VCALENDAR'); return L.join('\r\n');
 }
 // Days whose owner differs between two results (used to mark a proposal on the calendar).
@@ -301,5 +347,5 @@ function diffDays(a,b){ const out=[]; const keys=new Set([...Object.keys(a.days)
 // Exchanges in b that are not in a, and in a not in b.
 function diffExchanges(a,b){ const key=x=>`${x.t}|${x.from}|${x.to}`; const A=new Set(a.exchanges.map(key)), B=new Set(b.exchanges.map(key)); return {added:b.exchanges.filter(x=>!A.has(key(x))),removed:a.exchanges.filter(x=>!B.has(key(x)))}; }
 
-return {HOUR,DAYMS,utc,addD,ymd,hm,usd,usdStr,DOWN,dow,parseDate,parseHours,nth,last,monBefore,monOnOrBefore,easter,fixed,CAT,PLANSET,WEEKLY_PLAN,ROLE_TOKENS,roles,resolveWho,slotName,entryName,whoFor,parsePeriods,periodsFor,computeSchedule,configFrom,changePeriod,build,applyProposal,diffSettings,stable,icsText,diffDays,diffExchanges};
+return {HOUR,DAYMS,utc,addD,ymd,hm,usd,usdStr,DOWN,dow,parseDate,parseHours,nth,last,monBefore,monOnOrBefore,easter,fixed,CAT,PLANSET,WEEKLY_PLAN,ROLE_TOKENS,roles,resolveWho,slotName,entryName,whoFor,parsePeriods,periodsFor,computeSchedule,configFrom,changePeriod,build,ruleMatches,exchangePlace,applyProposal,diffSettings,stable,icsText,diffDays,diffExchanges};
 });

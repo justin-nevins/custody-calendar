@@ -27,6 +27,33 @@ jobs:
           for f in server/pb_hooks/*.js server/pb_migrations/*.js; do node --check "$f"; done
       - name: Engine runs
         run: node -e 'const E=require("./engine.js"); const r=E.build({v:5,parents:{M:{role:"mother"},F:{role:"father"}},children:[],pbd:{M:{},F:{}},regular:{on:true,pattern:"21,11",first:"father",xtime:"12:00"},phase:{begins:"start",weeklyOn:true,weekAnchor:"2026-12-28",weeksPerCycle:2,weekly:{rows:E.WEEKLY_PLAN}},holidays:{},customs:[],vacations:{list:[]},changes:[],cal:{start:"2026-12-01",years:2,limit:21,mode:"cap"}}); if(r.result.exchanges.length<5)process.exit(1); console.log("engine ok", r.result.exchanges.length, "exchanges")'
+      - name: Make-up modes
+        run: |
+          node -e '
+            const E=require("./engine.js");
+            const st=(makeup)=>({v:5,parents:{M:{role:"mother"},F:{role:"father"}},children:[],pbd:{M:{},F:{}},regular:{on:true,pattern:"21,11",first:"mother",xtime:"12:00"},phase:{begins:"start",weeklyOn:true,weekAnchor:"2026-12-28",weeksPerCycle:2,weekly:{rows:E.WEEKLY_PLAN}},holidays:{thanksus:{on:true,who:"Modd",before:3,after:4,start:"10:00",end:"10:00"},febtime:{on:true,who:"M",before:0,after:0,start:"00:00",end:"24:00"}},customs:[],vacations:{list:[]},changes:[],cal:{start:"2027-01-02",years:3,limit:21,mode:"cap",makeup}});
+            const none=E.build(st("none")).result, fixed=E.build(st("fixed")).result, shift=E.build(st("shift")).result;
+            if(!(fixed.madeDays>0)) { console.error("fixed mode made up no days"); process.exit(1); }
+            if(!fixed.exchanges.some(x=>x.kind==="makeup")) { console.error("no make-up exchange"); process.exit(1); }
+            for(let k=0;k<3;k++){ const a=none.summary[k], b=fixed.summary[k]; if(Math.abs(a.mDays+a.fDays-b.mDays-b.fDays)>1e-6){ console.error("days not conserved"); process.exit(1); } }
+            const times=new Set(none.exchanges.filter(x=>x.kind==="regular").map(x=>x.t)), ft=new Set(fixed.exchanges.map(x=>x.t));
+            let kept=0; for(const t of times) if(ft.has(t)) kept++; if(kept<times.size*0.8){ console.error("fixed mode moved the cycle dates"); process.exit(1); }
+            if(!(shift.shiftDays>0)) { console.error("shift mode shifted nothing"); process.exit(1); }
+            console.log("make-up modes ok: made", fixed.madeDays, "days; shift", shift.shiftDays, "days");
+          '
+      - name: Exchange rules
+        run: |
+          node -e '
+            const E=require("./engine.js");
+            const base=()=>({v:5,parents:{M:{role:"mother",name:"A"},F:{role:"father",name:"J"}},children:[],pbd:{M:{},F:{}},regular:{on:true,pattern:"21,11",first:"mother",xtime:"12:00",place:"airport"},phase:{begins:"start",weeklyOn:true,weekAnchor:"2026-12-28",weeksPerCycle:2,weekly:{rows:E.WEEKLY_PLAN,place:"school"}},holidays:{thanksus:{on:true,who:"Modd",before:3,after:4,start:"10:00",end:"10:00"}},customs:[],vacations:{list:[]},changes:[],xrules:[],cal:{start:"2027-01-02",years:2,limit:21,mode:"none",makeup:"none"}});
+            const r0=E.build(base()).result; const s1=base(); s1.xrules=[{applies:"ld",days:{0:true},dates:"",placeKind:"ending",place:"",time:"18:00"}]; const r1=E.build(s1).result;
+            const a=r0.exchanges.filter(x=>x.kind==="regular"), b=r1.exchanges.filter(x=>x.kind==="regular");
+            if(a.length!==b.length){ console.error("exchange count changed"); process.exit(1); }
+            let moved=0; for(let k=0;k<a.length;k++){ const sun=new Date(a[k].t).getUTCDay()===0; const h=new Date(b[k].t).getUTCHours(); if(h!==(sun?18:12)){ console.error("wrong hour at "+new Date(b[k].t).toISOString()); process.exit(1); } if(a[k].t!==b[k].t)moved++; const pl=E.exchangePlace(s1,r1,b[k]); if(pl!==(sun?(b[k].from==="M"?"A":"J")+"\x27s home":"airport")){ console.error("wrong place "+pl); process.exit(1); } }
+            if(!moved){ console.error("no exchange moved"); process.exit(1); }
+            const ics=E.icsText(r1,{M:"A",F:"J"},{name:"t",S:s1}); if(!/^LOCATION:/m.test(ics)){ console.error("no LOCATION in ics"); process.exit(1); }
+            console.log("exchange rules ok:", moved, "exchanges moved to 18:00 on Sundays");
+          '
       - name: HTML parses
         run: |
           python3 - <<'PY'
