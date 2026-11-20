@@ -117,6 +117,7 @@ function familyView(app, fam, me) {
   const proposals = app.findRecordsByFilter("proposals", "family = {:f}", "-created", 200, 0, { f: fam.id }).map((p) => ({
     id: p.id, kind: p.getString("kind"), payload: jget(p, "payload"), summary: p.getString("summary"), note: p.getString("note"), proposed_by: p.getString("proposed_by"),
     status: p.getString("status"), unconfirmed: p.getBool("unconfirmed"), decided_by: p.getString("decided_by"), decided_note: p.getString("decided_note"), decided_at: p.getString("decided_at"), created: p.getString("created"),
+    answer_by: p.getString("answer_by") ? p.getString("answer_by").slice(0, 10) : "", reminded: p.getBool("reminded"), replaces: p.getString("replaces") || "",
   }));
   const events = app.findRecordsByFilter("events", "family = {:f}", "-at", 300, 0, { f: fam.id }).map((ev) => ({ id: ev.id, at: ev.getString("at"), actor: ev.getString("actor"), action: ev.getString("action"), detail: ev.getString("detail"), proposal: ev.getString("proposal"), version: ev.get("version") }));
   const meOut = viewer ? { viewer: true, id: me.id, label: me.getString("label"), name: me.getString("name"), for_role: me.getString("for_role"), feed: me.getString("feed_token") } : { id: me.id, role: me.getString("role"), confirmed: me.getBool("confirmed"), feed: me.getString("feed_token") };
