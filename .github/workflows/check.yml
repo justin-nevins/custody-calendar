@@ -71,6 +71,17 @@ jobs:
             const t=E.ofwText(s1,sw,{from:"F",to:"M"}); if(!/Section II\.F/.test(t)||!/J asks A/.test(t)){ console.error("ofw text"); process.exit(1); }
             console.log("swaps, repeats and OFW text ok");
           '
+      - name: Proposal flow
+        run: |
+          node -e '
+            const E=require("./engine.js");
+            const base=()=>({v:5,parents:{M:{role:"mother",name:"A"},F:{role:"father",name:"J"}},children:[],pbd:{M:{},F:{}},regular:{on:true,pattern:"21,11",first:"mother",xtime:"12:00"},phase:{begins:"start",weeklyOn:true,weekAnchor:"2026-12-28",weeksPerCycle:2,weekly:{rows:E.WEEKLY_PLAN}},holidays:{},customs:[],vacations:{list:[]},changes:[],xrules:[],cal:{start:"2027-01-02",years:1,limit:21,mode:"none",makeup:"none"}});
+            const item={id:"care1",kind:"give",who:"M",s:"2027-01-29",sh:"17:00",e:"2027-01-30",eh:"10:00",note:"Work trip",applies:"both"};
+            const s=E.applyProposal(base(),"care",{item,away:"F"}); if(!s.changes.find(c=>c.id==="care1")){ console.error("care proposal not applied"); process.exit(1); }
+            const t=E.ofwText(s,item,{from:"F",to:"M",care:true,kindName:"First option to care",section:"Section II.I, First Option to Care"}); if(!/Section II\.I/.test(t)||!/first option to care/.test(t)){ console.error("care text"); process.exit(1); }
+            const a=E.ofwText(s,item,{from:"M",answer:"counter",counter:item}); if(!/proposes instead of/.test(a)||!/Proposed instead/.test(a)){ console.error("counter text"); process.exit(1); }
+            console.log("proposal flow ok");
+          '
       - name: HTML parses
         run: |
           python3 - <<'PY'

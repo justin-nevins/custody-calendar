@@ -136,23 +136,33 @@ routerAdd("POST", "/api/cc/confirm", (e) => {
 
 // ---- propose a change ----
 routerAdd("POST", "/api/cc/proposals", (e) => {
-  const { jget, engine, bad, emailOk, body, newCode, freshCode, allMembersOf, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView, viewerOf, requireParent, viewerText } = require(`${__hooks}/cc_lib.js`);
+  const { jget, engine, bad, emailOk, body, newCode, freshCode, allMembersOf, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView, viewerOf, requireParent, viewerText, parseAnswerBy } = require(`${__hooks}/cc_lib.js`);
     const me = requireParent($app, e.auth.id);
   const b = body(e);
   const kind = String(b.kind || "");
-  if (!["settings", "change", "vacation", "remove"].includes(kind)) bad("Unknown proposal kind.");
+  if (!["settings", "change", "vacation", "remove", "care"].includes(kind)) bad("Unknown proposal kind.");
   const summary = String(b.summary || "").trim().slice(0, 2000);
   if (!summary) bad("The proposal needs a one-line summary.");
   const fam = $app.findRecordById("families", me.getString("family"));
-  const applied = applyProposal(jget(fam, "settings"), kind, b.payload); // validates
   const members = membersOf($app, fam.id);
   const alone = members.length < 2;
+  const answerBy = parseAnswerBy(b.answer_by);
+  let payload = b.payload;
+  if (kind === "care") {
+    // First option to care (plan II.I): the asking parent will be away; the time is offered to the other parent.
+    const other = members.find((m) => m.id !== me.id); if (!other) bad("A care request needs the other parent on the calendar.");
+    const c = payload || {};
+    for (const k of ["s", "e"]) if (!/^\d{4}-\d{2}-\d{2}$/.test(String(c[k] || ""))) bad("The care request needs a from date and an until date.");
+    for (const k of ["sh", "eh"]) if (!/^\d{2}:\d{2}$/.test(String(c[k] || ""))) bad("The care request needs times.");
+    payload = { item: { id: "care" + Date.now().toString(36), kind: "give", who: other.getString("role"), s: c.s, sh: c.sh, e: c.e, eh: c.eh, note: String(c.note || "First option to care").slice(0, 200), applies: "both" }, away: me.getString("role") };
+  }
+  const applied = applyProposal(jget(fam, "settings"), kind, payload); // validates
   const myName = parentName(jget(fam, "settings"), me.getString("role"));
   let out = null;
   $app.runInTransaction((tx) => {
     const p = new Record(tx.findCollectionByNameOrId("proposals"));
-    p.set("family", fam.id); p.set("kind", kind); p.set("payload", b.payload); p.set("summary", summary); p.set("note", String(b.note || "").slice(0, 2000));
-    p.set("proposed_by", me.id); p.set("base_version", fam.get("version"));
+    p.set("family", fam.id); p.set("kind", kind); p.set("payload", payload); p.set("summary", summary); p.set("note", String(b.note || "").slice(0, 2000));
+    p.set("proposed_by", me.id); p.set("base_version", fam.get("version")); if (answerBy) p.set("answer_by", answerBy);
     if (alone) {
       const f = tx.findRecordById("families", fam.id);
       const v = (f.get("version") || 1) + 1;
@@ -169,7 +179,7 @@ routerAdd("POST", "/api/cc/proposals", (e) => {
   });
   if (!alone) {
     const other = members.find((m) => m.id !== me.id);
-    sendMail(userEmail($app, other.getString("user")), `${myName} proposes a change to the calendar`, `${summary}` + (b.note ? `\nReason: ${b.note}` : "") + `\n\nNothing changes until you approve it. Open your dashboard to approve or decline.`);
+    sendMail(userEmail($app, other.getString("user")), kind === "care" ? `${myName} offers you time with the child (first option to care)` : `${myName} proposes a change to the calendar`, `${summary}` + (b.note ? `\nReason: ${b.note}` : "") + (answerBy ? `\nAnswer by: ${answerBy.slice(0, 10)} (it closes on its own after that day)` : "") + `\n\nNothing changes until you approve it. Open your dashboard to approve, decline or counter.`);
   }
   return e.json(200, out);
 }, $apis.requireAuth("users"));
@@ -178,6 +188,64 @@ routerAdd("POST", "/api/cc/proposals", (e) => {
 routerAdd("POST", "/api/cc/proposals/{id}/approve", (e) => require(`${__hooks}/cc_lib.js`).decide(e, "approve"), $apis.requireAuth("users"));
 routerAdd("POST", "/api/cc/proposals/{id}/decline", (e) => require(`${__hooks}/cc_lib.js`).decide(e, "decline"), $apis.requireAuth("users"));
 routerAdd("POST", "/api/cc/proposals/{id}/withdraw", (e) => require(`${__hooks}/cc_lib.js`).decide(e, "withdraw"), $apis.requireAuth("users"));
+
+// ---- counter-offer: the deciding parent answers an open proposal with a different one ----
+routerAdd("POST", "/api/cc/proposals/{id}/counter", (e) => {
+  const { jget, bad, body, parentName, membersOf, userEmail, applyProposal, addEvent, sendMail, familyView, requireParent, parseAnswerBy } = require(`${__hooks}/cc_lib.js`);
+  const me = requireParent($app, e.auth.id);
+  const id = e.request.pathValue("id");
+  let p = null;
+  try { p = $app.findRecordById("proposals", id); } catch (_) { bad("That proposal no longer exists."); }
+  if (p.getString("family") !== me.getString("family")) bad("That proposal is not on your calendar.");
+  if (p.getString("status") !== "open") bad(`That proposal is already ${p.getString("status")}.`);
+  if (p.getString("proposed_by") === me.id) bad("To change your own proposal, withdraw it and send a new one.");
+  if (!["change", "vacation", "care"].includes(p.getString("kind"))) bad("Only a change, a vacation or a care request can be answered with a counter-offer.");
+  const b = body(e);
+  const kind = p.getString("kind") === "vacation" ? "vacation" : "change";
+  const summary = String(b.summary || "").trim().slice(0, 2000); if (!summary) bad("The counter-offer needs a one-line summary.");
+  const note = String(b.note || "").trim().slice(0, 2000);
+  const answerBy = parseAnswerBy(b.answer_by);
+  const fam = $app.findRecordById("families", me.getString("family"));
+  applyProposal(jget(fam, "settings"), kind, b.payload); // validates the counter-offer against the calendar
+  const myName = parentName(jget(fam, "settings"), me.getString("role"));
+  let out = null;
+  $app.runInTransaction((tx) => {
+    const pr = tx.findRecordById("proposals", p.id);
+    pr.set("status", "countered"); pr.set("decided_by", me.id); pr.set("decided_at", new Date().toISOString()); pr.set("decided_note", note); tx.save(pr);
+    const n = new Record(tx.findCollectionByNameOrId("proposals"));
+    n.set("family", fam.id); n.set("kind", kind); n.set("payload", b.payload); n.set("summary", summary); n.set("note", note);
+    n.set("proposed_by", me.id); n.set("base_version", fam.get("version")); n.set("status", "open"); n.set("replaces", p.id); if (answerBy) n.set("answer_by", answerBy);
+    tx.save(n);
+    addEvent(tx, fam.id, me.id, "countered", `${myName} answered "${p.getString("summary")}" with a counter-offer: ${summary}` + (note ? ` ("${note}")` : ""), n.id, fam.get("version"));
+    out = familyView(tx, fam, me); out.proposal_id = n.id;
+  });
+  const other = membersOf($app, fam.id).find((m) => m.id !== me.id);
+  if (other) sendMail(userEmail($app, other.getString("user")), `${myName} proposes instead: ${summary}`, `Instead of "${p.getString("summary")}", ${myName} proposes: ${summary}` + (note ? `\nNote: ${note}` : "") + (answerBy ? `\nAnswer by: ${answerBy.slice(0, 10)}` : "") + `\n\nNothing changes until you approve it. Open your dashboard to approve, decline or counter.`);
+  return e.json(200, out);
+}, $apis.requireAuth("users"));
+
+// ---- answer-by dates: a reminder the day before, and expiry after the day has passed ----
+cronAdd("proposal-deadlines", "15 * * * *", () => {
+  const lib = require(`${__hooks}/cc_lib.js`);
+  const now = Date.now();
+  const rows = $app.findRecordsByFilter("proposals", "status = 'open' && answer_by != ''", "", 500, 0, {});
+  for (const p of rows) {
+    const day = p.getString("answer_by").slice(0, 10); const endOfDay = Date.parse(day + "T00:00:00Z") + 86400000; if (isNaN(endOfDay)) continue;
+    const fam = $app.findRecordById("families", p.getString("family")); const settings = lib.jget(fam, "settings");
+    const members = lib.membersOf($app, fam.id); const proposer = members.find((m) => m.id === p.getString("proposed_by")); const other = members.find((m) => m.id !== p.getString("proposed_by"));
+    const who = proposer ? lib.parentName(settings, proposer.getString("role")) : "The other parent";
+    if (now >= endOfDay) {
+      $app.runInTransaction((tx) => {
+        const pr = tx.findRecordById("proposals", p.id); pr.set("status", "expired"); pr.set("decided_at", new Date().toISOString()); tx.save(pr);
+        lib.addEvent(tx, fam.id, null, "expired", `Not answered by ${day}: ${p.getString("summary")}`, p.id, fam.get("version"));
+      });
+      for (const m of members) lib.sendMail(lib.userEmail($app, m.getString("user")), `Closed, not answered by ${day}: ${p.getString("summary")}`, `The proposal "${p.getString("summary")}" asked for an answer by ${day} and got none. It is closed and the calendar is unchanged. It can be proposed again.`);
+    } else if (!p.getBool("reminded") && endOfDay - now <= 36 * 3600000 && other) {
+      const pr = $app.findRecordById("proposals", p.id); pr.set("reminded", true); $app.save(pr);
+      lib.sendMail(lib.userEmail($app, other.getString("user")), `Reminder, answer by ${day}: ${p.getString("summary")}`, `${who} asked for an answer by ${day} to: ${p.getString("summary")}.\n\nOpen your dashboard to approve, decline or counter. If it is not answered by the end of that day, it closes on its own and the calendar stays as it is.`);
+    }
+  }
+});
 
 // ---- calendar feed: a private address per parent; approved calendar only ----
 routerAdd("GET", "/api/cc/feed/{token}", (e) => {

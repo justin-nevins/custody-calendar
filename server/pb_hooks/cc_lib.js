@@ -117,6 +117,7 @@ function familyView(app, fam, me) {
   const proposals = app.findRecordsByFilter("proposals", "family = {:f}", "-created", 200, 0, { f: fam.id }).map((p) => ({
     id: p.id, kind: p.getString("kind"), payload: jget(p, "payload"), summary: p.getString("summary"), note: p.getString("note"), proposed_by: p.getString("proposed_by"),
     status: p.getString("status"), unconfirmed: p.getBool("unconfirmed"), decided_by: p.getString("decided_by"), decided_note: p.getString("decided_note"), decided_at: p.getString("decided_at"), created: p.getString("created"),
+    answer_by: p.getString("answer_by") ? p.getString("answer_by").slice(0, 10) : "", reminded: p.getBool("reminded"), replaces: p.getString("replaces") || "",
   }));
   const events = app.findRecordsByFilter("events", "family = {:f}", "-at", 300, 0, { f: fam.id }).map((ev) => ({ id: ev.id, at: ev.getString("at"), actor: ev.getString("actor"), action: ev.getString("action"), detail: ev.getString("detail"), proposal: ev.getString("proposal"), version: ev.get("version") }));
   const meOut = viewer ? { viewer: true, id: me.id, label: me.getString("label"), name: me.getString("name"), for_role: me.getString("for_role"), feed: me.getString("feed_token") } : { id: me.id, role: me.getString("role"), confirmed: me.getBool("confirmed"), feed: me.getString("feed_token") };
@@ -169,4 +170,15 @@ function decide(e, action) {
   return e.json(200, out);
 }
 
-module.exports = { decide, allMembersOf, freshCode, viewerOf, requireParent, isViewer, viewerText, LABELS, jget, CODE_ALPHABET, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, clone, applyProposal, addEvent, sendMail, familyView };
+// An answer-by date from the client: YYYY-MM-DD, today or later (UTC), within 400 days. Returns PocketBase's
+// datetime text or "" when none was given.
+function parseAnswerBy(v) {
+  const s = String(v || "").trim(); if (!s) return "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) bad("The answer-by date must be YYYY-MM-DD.");
+  const d = Date.parse(s + "T00:00:00Z"); const today = Date.parse(new Date().toISOString().slice(0, 10) + "T00:00:00Z");
+  if (isNaN(d) || d < today) bad("The answer-by date is in the past.");
+  if (d - today > 400 * 86400000) bad("The answer-by date is more than 400 days away.");
+  return s + " 00:00:00.000Z";
+}
+
+module.exports = { decide, parseAnswerBy, allMembersOf, freshCode, viewerOf, requireParent, isViewer, viewerText, LABELS, jget, CODE_ALPHABET, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, clone, applyProposal, addEvent, sendMail, familyView };

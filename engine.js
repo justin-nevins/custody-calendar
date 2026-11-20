@@ -329,14 +329,14 @@ function changeSummary(S,ch){
 function ofwText(S,ch,opts={}){
   const PN=k=>(k==='M'||k==='F')?slotName(S,k):(k||'');
   const L=[];
-  const what=changeSummary(S,ch); const kindName=ch.kind==='swap'?'Swap of parenting time':ch.kind==='move'?'Moved exchange':'Parenting time given';
+  const what=opts.what||changeSummary(S,ch); const kindName=opts.kindName||(ch.kind==='swap'?'Swap of parenting time':ch.kind==='move'?'Moved exchange':ch.kind==='give'?'Parenting time given':'Schedule change'); const section=opts.section||'Section II.F, Schedule Changes';
   if(opts.answer){
     const verb=opts.answer==='approve'?'agrees to':opts.answer==='decline'?'does not agree to':opts.answer==='counter'?'proposes instead of':'withdraws';
-    L.push(`Re: ${kindName} (Parenting Plan, Section II.F, Schedule Changes)`,'',`${PN(opts.from)||'I'} ${verb} the request: ${what}.`);
+    L.push(`Re: ${kindName} (Parenting Plan, ${section})`,'',`${PN(opts.from)||'I'} ${verb} the request: ${what}.`);
     if(opts.answer==='counter'&&opts.counter)L.push(`Proposed instead: ${changeSummary(S,opts.counter)}.`);
   } else {
-    L.push(`Request: ${kindName} (Parenting Plan, Section II.F, Schedule Changes)`,'',`${PN(opts.from)||'I'} ask${PN(opts.from)?'s':''} ${PN(opts.to)||'the other parent'} to agree to this one-time change: ${what}.`);
-    L.push('The regular schedule is not changed. Holiday, vacation and special-day periods stay as they are.');
+    if(opts.care)L.push(`Notice: ${kindName} (Parenting Plan, ${section})`,'',`${PN(opts.from)||'I'} will be away from the child for more than eight hours during ${PN(opts.from)?'their':'my'} parenting time: ${what}. ${PN(opts.to)||'The other parent'} has the first option to care for the child during that time.`);
+    else { L.push(`Request: ${kindName} (Parenting Plan, ${section})`,'',`${PN(opts.from)||'I'} ask${PN(opts.from)?'s':''} ${PN(opts.to)||'the other parent'} to agree to this one-time change: ${what}.`); L.push('The regular schedule is not changed. Holiday, vacation and special-day periods stay as they are.'); }
     if(opts.answerBy)L.push(`An answer by ${usdStr(opts.answerBy)} would help with planning.`);
   }
   if(opts.note||ch.note)L.push(`Reason: ${opts.note||ch.note}.`);
@@ -357,9 +357,9 @@ function applyProposal(settings,kind,payload){
     const next=JSON.parse(JSON.stringify(payload.settings));
     next.changes=s.changes||[]; next.vacations=next.vacations||{}; next.vacations.list=(s.vacations&&s.vacations.list)||[];
     s=next;
-  } else if(kind==='change'||kind==='vacation'){
+  } else if(kind==='change'||kind==='vacation'||kind==='care'){ // a care request is a give to the other parent
     const item=payload&&payload.item; if(!item||!item.id)throw new Error('The proposal has no item.');
-    const list=kind==='change'?(s.changes=s.changes||[]):((s.vacations=s.vacations||{}).list=s.vacations.list||[]);
+    const list=kind!=='vacation'?(s.changes=s.changes||[]):((s.vacations=s.vacations||{}).list=s.vacations.list||[]);
     const i=list.findIndex(x=>x.id===item.id); if(i>=0)list[i]=item; else list.push(item);
   } else if(kind==='remove'){
     const list=payload&&payload.list, id=payload&&payload.id;
