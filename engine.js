@@ -222,6 +222,40 @@ function changePeriod(ch,base){
 // Both calendars from one settings object: base (no one-time changes) and result (with them).
 function build(S){ const base=computeSchedule(configFrom(S,false,null)); const result=computeSchedule(configFrom(S,true,base)); return {base,result}; }
 
+// ===================== Proposals =====================
+// Apply one proposal to a settings object and return the new settings (the input is not changed). One-time changes
+// and vacations are edited item by item; everything else travels as "the settings" and keeps the current items.
+// Throws an Error with a plain sentence when the proposal is malformed or the calendar cannot be built from it.
+function applyProposal(settings,kind,payload){
+  let s=JSON.parse(JSON.stringify(settings));
+  if(kind==='settings'){
+    if(!payload||typeof payload.settings!=='object')throw new Error('The proposal has no settings.');
+    const next=JSON.parse(JSON.stringify(payload.settings));
+    next.changes=s.changes||[]; next.vacations=next.vacations||{}; next.vacations.list=(s.vacations&&s.vacations.list)||[];
+    s=next;
+  } else if(kind==='change'||kind==='vacation'){
+    const item=payload&&payload.item; if(!item||!item.id)throw new Error('The proposal has no item.');
+    const list=kind==='change'?(s.changes=s.changes||[]):((s.vacations=s.vacations||{}).list=s.vacations.list||[]);
+    const i=list.findIndex(x=>x.id===item.id); if(i>=0)list[i]=item; else list.push(item);
+  } else if(kind==='remove'){
+    const list=payload&&payload.list, id=payload&&payload.id;
+    if(!id||(list!=='changes'&&list!=='vacations'))throw new Error('The proposal does not say what to remove.');
+    const arr=list==='changes'?(s.changes||[]):((s.vacations&&s.vacations.list)||[]);
+    const i=arr.findIndex(x=>x.id===id); if(i<0)throw new Error('That item is no longer on the calendar.');
+    arr.splice(i,1);
+  } else throw new Error('Unknown proposal kind.');
+  try{ build(s); }catch(err){ throw new Error('The calendar cannot be built with this change: '+(err&&err.message?err.message:err)); }
+  return s;
+}
+// What differs between two settings objects, by section, plus the items added, edited or removed.
+const SECTION_KEYS={people:s=>[s.parents,s.children,s.pbd],regular:s=>[s.regular],local:s=>[s.phase.weeklyOn,s.phase.weekAnchor,s.phase.weeksPerCycle,s.phase.weekly],change:s=>[s.phase.begins,s.phase.move,s.phase.movePre,s.phase.ldDate,s.phase.ldEnd],hol:s=>[s.holidays,s.customs],vac:s=>[s.vacations&&s.vacations.allow,s.vacations&&s.vacations.notice,s.vacations&&s.vacations.maxLen],limits:s=>[s.cal]};
+function diffSettings(a,b){
+  const J=x=>JSON.stringify(x===undefined?null:x);
+  const sections=Object.keys(SECTION_KEYS).filter(k=>J(SECTION_KEYS[k](a))!==J(SECTION_KEYS[k](b)));
+  const items=(la,lb,list)=>{ const out=[]; const A=new Map((la||[]).map(x=>[x.id,x])), B=new Map((lb||[]).map(x=>[x.id,x])); for(const [id,x] of B){ if(!A.has(id))out.push({op:'add',list,item:x}); else if(J(A.get(id))!==J(x))out.push({op:'edit',list,item:x}); } for(const [id,x] of A){ if(!B.has(id))out.push({op:'remove',list,item:x}); } return out; };
+  return {sections,items:[...items(a.changes,b.changes,'changes'),...items(a.vacations&&a.vacations.list,b.vacations&&b.vacations.list,'vacations')]};
+}
+
 // ===================== Exports =====================
 const icsDate=t=>new Date(t).toISOString().replace(/[-:]/g,'').slice(0,15);
 const icsEsc=s=>String(s==null?'':s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
@@ -242,5 +276,5 @@ function diffDays(a,b){ const out=[]; const keys=new Set([...Object.keys(a.days)
 // Exchanges in b that are not in a, and in a not in b.
 function diffExchanges(a,b){ const key=x=>`${x.t}|${x.from}|${x.to}`; const A=new Set(a.exchanges.map(key)), B=new Set(b.exchanges.map(key)); return {added:b.exchanges.filter(x=>!A.has(key(x))),removed:a.exchanges.filter(x=>!B.has(key(x)))}; }
 
-return {HOUR,DAYMS,utc,addD,ymd,hm,DOWN,dow,parseDate,parseHours,nth,last,monBefore,monOnOrBefore,easter,fixed,CAT,PLANSET,WEEKLY_PLAN,ROLE_TOKENS,roles,resolveWho,slotName,entryName,whoFor,parsePeriods,periodsFor,computeSchedule,configFrom,changePeriod,build,icsText,diffDays,diffExchanges};
+return {HOUR,DAYMS,utc,addD,ymd,hm,DOWN,dow,parseDate,parseHours,nth,last,monBefore,monOnOrBefore,easter,fixed,CAT,PLANSET,WEEKLY_PLAN,ROLE_TOKENS,roles,resolveWho,slotName,entryName,whoFor,parsePeriods,periodsFor,computeSchedule,configFrom,changePeriod,build,applyProposal,diffSettings,icsText,diffDays,diffExchanges};
 });

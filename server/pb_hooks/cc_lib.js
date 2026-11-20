@@ -47,33 +47,9 @@ function clone(x) { return JSON.parse(JSON.stringify(x)); }
 // JSON fields come out of a record as raw bytes in the hooks runtime; read them as text and parse.
 function jget(rec, field) { const t = rec.getString(field); return t ? JSON.parse(t) : null; }
 
-// The one-time changes and vacations are edited item by item; everything else is "the settings".
+// Apply a proposal with the shared engine function; its plain-sentence errors become 400 responses.
 function applyProposal(settings, kind, payload) {
-  let s = clone(settings);
-  if (kind === "settings") {
-    if (!payload || typeof payload.settings !== "object") bad("The proposal has no settings.");
-    const next = clone(payload.settings);
-    next.changes = s.changes || [];
-    next.vacations = next.vacations || {};
-    next.vacations.list = (s.vacations && s.vacations.list) || [];
-    s = next;
-  } else if (kind === "change" || kind === "vacation") {
-    const item = payload && payload.item;
-    if (!item || !item.id) bad("The proposal has no item.");
-    const list = kind === "change" ? (s.changes = s.changes || []) : ((s.vacations = s.vacations || {}).list = s.vacations.list || []);
-    const i = list.findIndex((x) => x.id === item.id);
-    if (i >= 0) list[i] = item; else list.push(item);
-  } else if (kind === "remove") {
-    const list = payload && payload.list, id = payload && payload.id;
-    if (!id || (list !== "changes" && list !== "vacations")) bad("The proposal does not say what to remove.");
-    const arr = list === "changes" ? (s.changes || []) : ((s.vacations && s.vacations.list) || []);
-    const i = arr.findIndex((x) => x.id === id);
-    if (i < 0) bad("That item is no longer on the calendar.");
-    arr.splice(i, 1);
-  } else bad("Unknown proposal kind.");
-  // The calendar must still compute; the engine throws a plain sentence when it cannot.
-  try { engine().build(s); } catch (err) { bad("The calendar cannot be built with this change: " + (err && err.message ? err.message : err)); }
-  return s;
+  try { return engine().applyProposal(settings, kind, payload); } catch (err) { bad(err && err.message ? err.message : String(err)); }
 }
 
 function addEvent(app, familyId, actorId, action, detail, proposalId, version) {
