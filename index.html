@@ -286,182 +286,10 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   </div>
 </section>
 
+<script src="engine.js"></script>
 <script>
-// ===================== Engine (no DOM) =====================
-const HOUR=3600000, DAYMS=86400000;
-const utc=(y,m,d,h=0)=>Date.UTC(y,m-1,d,h);
-const addD=(t,n)=>t+n*DAYMS;
-const ymd=t=>new Date(t).toISOString().slice(0,10);
-const hm=t=>new Date(t).toISOString().slice(11,16);
-const DOWN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const dow=t=>new Date(t).getUTCDay();
-const parseDate=s=>{const m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec((s||'').trim());return m?utc(+m[1],+m[2],+m[3]):null};
-const parseHours=s=>{s=(s||'').trim(); if(s==='24:00'||s==='end')return 24; const m=/^(\d{1,2})(?::(\d{2}))?$/.exec(s); return m?Math.min(24,+m[1]):0};
-const nth=(y,m,n,wd)=>{let t=utc(y,m,1);const off=(wd-dow(t)+7)%7;return addD(t,off+7*(n-1))};
-const last=(y,m,wd)=>{let t=utc(y,m+1,0);const off=(dow(t)-wd+7)%7;return addD(t,-off)};
-const monBefore=(y,m,d)=>{let t=utc(y,m,d);const off=(dow(t)+6)%7;return addD(t,-(off===0?7:off))};
-const monOnOrBefore=t=>addD(t,-((dow(t)+6)%7));
-const easter=y=>{const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1;return utc(y,mo,da)};
-const fixed=(m,d)=>y=>utc(y,m,d);
-
-// Holiday catalog. pri: 1 birthdays / Mother's Day / Father's Day, 2 Thanksgiving and Christmas, 3 vacation periods, 4 other days. 0 = one-time changes (strongest).
-const CAT=[
- {id:'newyear',name:"New Year's Day",region:'Both',ruleText:'January 1',rule:fixed(1,1),pri:4},
- {id:'mlk',name:'Martin Luther King Jr. Day',region:'US',ruleText:'3rd Monday of January',rule:y=>nth(y,1,3,1),pri:4},
- {id:'family',name:'Family Day',region:'Canada',ruleText:'3rd Monday of February',rule:y=>nth(y,2,3,1),pri:4},
- {id:'presidents',name:"Presidents' Day",region:'US',ruleText:'3rd Monday of February',rule:y=>nth(y,2,3,1),pri:4},
- {id:'valentine',name:"Valentine's Day",region:'Both',ruleText:'February 14',rule:fixed(2,14),pri:4},
- {id:'stpatrick',name:"St. Patrick's Day",region:'Both',ruleText:'March 17',rule:fixed(3,17),pri:4},
- {id:'goodfriday',name:'Good Friday',region:'Canada',ruleText:'Friday before Easter',rule:y=>addD(easter(y),-2),pri:4},
- {id:'easter',name:'Easter Sunday',region:'Both',ruleText:'Easter Sunday',rule:y=>easter(y),pri:4},
- {id:'eastermon',name:'Easter Monday',region:'Canada',ruleText:'Monday after Easter',rule:y=>addD(easter(y),1),pri:4},
- {id:'mothers',name:"Mother's Day",region:'Both',ruleText:'2nd Sunday of May',rule:y=>nth(y,5,2,0),pri:1},
- {id:'victoria',name:'Victoria Day',region:'Canada',ruleText:'Monday before May 25',rule:y=>monBefore(y,5,25),pri:4},
- {id:'memorial',name:'Memorial Day',region:'US',ruleText:'Last Monday of May',rule:y=>last(y,5,1),pri:4},
- {id:'fathers',name:"Father's Day",region:'Both',ruleText:'3rd Sunday of June',rule:y=>nth(y,6,3,0),pri:1},
- {id:'juneteenth',name:'Juneteenth',region:'US',ruleText:'June 19',rule:fixed(6,19),pri:4},
- {id:'canadaday',name:'Canada Day',region:'Canada',ruleText:'July 1',rule:fixed(7,1),pri:4},
- {id:'july4',name:'Independence Day',region:'US',ruleText:'July 4',rule:fixed(7,4),pri:4},
- {id:'civic',name:'Civic Holiday',region:'Canada',ruleText:'1st Monday of August',rule:y=>nth(y,8,1,1),pri:4},
- {id:'labor',name:'Labor Day / Labour Day',region:'Both',ruleText:'1st Monday of September',rule:y=>nth(y,9,1,1),pri:4},
- {id:'truth',name:'National Day for Truth and Reconciliation',region:'Canada',ruleText:'September 30',rule:fixed(9,30),pri:4},
- {id:'columbus',name:"Columbus Day / Indigenous Peoples' Day",region:'US',ruleText:'2nd Monday of October',rule:y=>nth(y,10,2,1),pri:4},
- {id:'thanksca',name:'Thanksgiving (Canada)',region:'Canada',ruleText:'2nd Monday of October',rule:y=>nth(y,10,2,1),pri:2},
- {id:'halloween',name:'Halloween',region:'Both',ruleText:'October 31',rule:fixed(10,31),pri:4},
- {id:'veterans',name:'Veterans Day',region:'US',ruleText:'November 11',rule:fixed(11,11),pri:4},
- {id:'remembrance',name:'Remembrance Day',region:'Canada',ruleText:'November 11',rule:fixed(11,11),pri:4},
- {id:'thanksus',name:'Thanksgiving (US)',region:'US',ruleText:'4th Thursday of November',rule:y=>nth(y,11,4,4),pri:2},
- {id:'blackfriday',name:'Day after Thanksgiving',region:'US',ruleText:'Friday after Thanksgiving',rule:y=>addD(nth(y,11,4,4),1),pri:4},
- {id:'xmaseve',name:'Christmas Eve',region:'Both',ruleText:'December 24',rule:fixed(12,24),pri:2},
- {id:'xmas',name:'Christmas Day',region:'Both',ruleText:'December 25',rule:fixed(12,25),pri:2},
- {id:'boxing',name:'Boxing Day',region:'Canada',ruleText:'December 26',rule:fixed(12,26),pri:4},
- {id:'nye',name:"New Year's Eve",region:'Both',ruleText:'December 31',rule:fixed(12,31),pri:4},
- {id:'prexmas',name:'Pre-Christmas period',region:'Plan',ruleText:'December 18 to 23',rule:fixed(12,18),pri:2,plan:{who:'Modd',before:0,after:5,start:'10:00',end:'10:00'}},
- {id:'xmasper',name:'Christmas period',region:'Plan',ruleText:'December 23 to 28',rule:fixed(12,23),pri:2,plan:{who:'Meven',before:0,after:5,start:'10:00',end:'10:00'}},
- {id:'nyper',name:'New Year period',region:'Plan',ruleText:'December 28 to January 2',rule:fixed(12,28),pri:2,plan:{who:'Modd',before:0,after:5,start:'10:00',end:'10:00'}},
- {id:'febtime',name:"Mother's February time",region:'Plan',ruleText:'February 1 to 14',rule:fixed(2,1),pri:3,sameCity:true,plan:{who:'M',before:0,after:13,start:'00:00',end:'24:00'}},
- {id:'maytime',name:"Mother's May time",region:'Plan',ruleText:'May 1 to 14',rule:fixed(5,1),pri:3,sameCity:true,plan:{who:'M',before:0,after:13,start:'00:00',end:'24:00'}},
-];
-const PLANSET={mothers:{who:'M',before:2,after:1,start:'17:00',end:'10:00'},fathers:{who:'F',before:2,after:1,start:'17:00',end:'10:00'},thanksus:{who:'Modd',before:3,after:4,start:'10:00',end:'10:00'}};
-const WEEKLY_PLAN=[{week:1,parent:'F',sd:4,st:'17:00',ed:1,et:'09:00'},{week:2,parent:'F',sd:4,st:'12:00',ed:5,et:'17:00'}];
-function whoFor(who,y){ if(who==='M'||who==='F')return who; if(who==='Modd')return (y%2===1)?'M':'F'; return (y%2===0)?'M':'F'; }
-function parsePeriods(text){
-  const out=[];
-  for(const part of (text||'').split(/[;\n]/)){
-    const m=/^\s*(\d{4}-\d{1,2}-\d{1,2})(?:\s+(\d{1,2}:\d{2}))?\s*(?:to|-|–)\s*(\d{4}-\d{1,2}-\d{1,2})(?:\s+(\d{1,2}:\d{2}))?\s*$/.exec(part);
-    if(!m)continue;
-    const a=parseDate(m[1]),b=parseDate(m[3]); if(a===null||b===null)continue;
-    const s=a+parseHours(m[2]||'0:00')*HOUR, e=b+parseHours(m[4]||'24:00')*HOUR;
-    if(e>s)out.push([s,e]);
-  }
-  return out;
-}
-function periodsFor(entry,cfg,y,day){
-  const who=whoFor(cfg.who,y); const list=[];
-  const ov=parsePeriods(cfg.dates).filter(([s])=>new Date(s).getUTCFullYear()===y);
-  const applies=cfg.applies||(entry.sameCity?'local':'both');
-  if(ov.length){ for(const [s,e] of ov) list.push({s,e,who,name:entry.name,pri:entry.pri,applies}); return list; }
-  if(day===null)return list;
-  const s=addD(day,-(+cfg.before||0))+parseHours(cfg.start)*HOUR;
-  let e=addD(day,(+cfg.after||0))+parseHours(cfg.end)*HOUR;
-  if(e<=s)e+=DAYMS;
-  list.push({s,e,who,name:entry.name,pri:entry.pri,applies});
-  return list;
-}
-function computeSchedule(c){
-  const start=parseDate(c.start); if(start===null)throw new Error('The calendar start date is missing (Settings, Limits and range).');
-  const y0=new Date(start).getUTCFullYear(), years=Math.max(1,Math.min(10,+c.years||1));
-  const t0=start, t1=utc(y0+years,1,1); const N=Math.round((t1-t0)/HOUR);
-  const par=new Uint8Array(N); const src=new Int16Array(N);
-  const P={M:1,F:2}, R={1:'M',2:'F'};
-  const xh=parseHours(c.xtime);
-  let begins=c.begins||'start', ldStart=null, noMove=false;
-  if(begins==='move'){ const m=parseDate(c.move); if(m===null){ begins='never'; noMove=true; } else ldStart=addD(m,-(+c.movePre||0))+xh*HOUR; }
-  else if(begins==='date'){ const d=parseDate(c.ldDate); if(d===null)throw new Error('Enter the date the long distance schedule starts (Settings, Which schedule is in force).'); ldStart=d+xh*HOUR; }
-  else if(begins==='start'){ ldStart=t0+xh*HOUR; }
-  const weeklyPhase = begins==='never' || (c.weeklyOn!==false && begins!=='start' && ldStart!==null);
-  const blocksAnchor = ldStart!==null?ldStart:(t0+xh*HOUR);
-  const pattern=(c.pattern||[]).map(Number).filter(n=>n>0); if(begins!=='never'&&!pattern.length)throw new Error('The block pattern needs at least one number (Settings, Long Distance Schedule).');
-  const cycleLen=pattern.reduce((a,b)=>a+b,0)||1;
-  let order=pattern.length?pattern.map((n,k)=>({p:k%2===0?1:2,n})):[{p:1,n:1}];
-  if(c.first==='F'){ const k=order.findIndex(o=>o.p===2); if(k>0)order=order.slice(k).concat(order.slice(0,k)); }
-  const blockParent=(t)=>{ let off=Math.floor((t-blocksAnchor)/DAYMS); off=((off%cycleLen)+cycleLen)%cycleLen; let acc=0; for(const o of order){ acc+=o.n; if(off<acc)return o.p; } return order[order.length-1].p; };
-  const wpc=Math.max(1,Math.min(4,+c.weeksPerCycle||2));
-  const wa=parseDate(c.weekAnchor); const anchorMon=monOnOrBefore(wa!==null?wa:t0);
-  const rows=(c.weekly||[]).map(r=>({...r,week:+r.week||1,sd:+r.sd,ed:+r.ed,sh:parseHours(r.st),eh:parseHours(r.et)}));
-  const weeklyParent=(t)=>{
-    const cyc=Math.floor((t-anchorMon)/(7*DAYMS*wpc)); const cycStart=anchorMon+cyc*7*DAYMS*wpc;
-    for(const r of rows){
-      const wk=cycStart+(r.week-1)*7*DAYMS;
-      const s=wk+((r.sd+6)%7)*DAYMS+r.sh*HOUR; let e=wk+((r.ed+6)%7)*DAYMS+r.eh*HOUR; if(e<=s)e+=7*DAYMS;
-      for(const base of [s-7*DAYMS*wpc,s,s+7*DAYMS*wpc]){ if(t>=base&&t<base+(e-s))return P[r.parent]||2; }
-    }
-    return rows.length&&rows[0].parent==='F'?1:(rows.length?2:1);
-  };
-  const le=parseDate(c.ldEnd); const ldEnd=(le!==null&&begins!=='never'&&c.weeklyOn!==false)?le+xh*HOUR:null;
-  const inWeekly=(t)=> begins==='never' || (weeklyPhase && t<ldStart) || (ldEnd!==null && t>=ldEnd);
-  for(let i=0;i<N;i++){ const t=t0+i*HOUR; par[i]= inWeekly(t)?weeklyParent(t):blockParent(t); }
-  const periods=[];
-  for(let y=y0-1;y<=y0+years;y++){
-    for(const h of CAT){ const cfg=c.holidays&&c.holidays[h.id]; if(!cfg||!cfg.on)continue; for(const p of periodsFor(h,cfg,y,h.rule(y)))periods.push(p); }
-    for(const [id,cfg] of Object.entries(c.birthdays||{})){ if(!cfg||!cfg.on)continue; const m=/^(\d{1,2})-(\d{1,2})$/.exec((cfg.md||'').trim()); const day=m?utc(y,+m[1],+m[2]):null; for(const p of periodsFor({name:cfg.name||'Birthday',pri:1},cfg,y,day))periods.push(p); }
-  }
-  for(const cu of (c.customs||[])){ for(const [ps,pe] of parsePeriods(cu.dates)){ const y=new Date(ps).getUTCFullYear(); periods.push({s:ps,e:pe,who:whoFor(cu.who||'M',y),name:cu.name||'Custom period',pri:(cu.pri==null||cu.pri==='')?3:+cu.pri,applies:cu.applies||'both',kind:cu.kind||'custom'}); } }
-  periods.sort((a,b)=>b.pri-a.pri);
-  periods.forEach((p,k)=>{p.idx=k+1;});
-  for(const p of periods){
-    const i0=Math.max(0,Math.ceil((p.s-t0)/HOUR)), i1=Math.min(N,Math.ceil((p.e-t0)/HOUR));
-    for(let i=i0;i<i1;i++){ const loc=inWeekly(t0+i*HOUR); if(p.applies==='local'&&!loc)continue; if(p.applies==='ld'&&loc)continue; par[i]=P[p.who]; src[i]=p.idx; }
-  }
-  const limitH=(+c.limit||21)*24; let movedH=0;
-  if(c.mode==='cap'){
-    let i=0;
-    while(i<N){
-      const p=par[i]; const s=i; while(i<N&&par[i]===p)i++;
-      const e=i;
-      if(inWeekly(t0+s*HOUR))continue; // the local schedule is not under the rule
-      let ex=e-s-limitH; if(ex<=0)continue;
-      ex=Math.ceil(ex/24)*24; const other=3-p;
-      const isHol=k=>src[k]>0;
-      const take=k=>{par[k]=other;src[k]=-1;ex--;movedH++};
-      let j=e-1; while(ex>0&&j>=s&&!isHol(j)){take(j);j--}
-      j=s; while(ex>0&&j<e&&!isHol(j)){take(j);j++}
-      j=e-1; while(ex>0&&j>=s){ if(!isHol(j)&&par[j]===p)take(j); j--; }
-    }
-  }
-  const segs=[]; { let i=0; while(i<N){const p=par[i],s=i; while(i<N&&par[i]===p)i++; segs.push({p:R[p],s:t0+s*HOUR,e:t0+i*HOUR,h:i-s});} }
-  const reason=(i)=>{ const k=src[i]; if(k===-1)return 'day limit rule'; if(k>0)return periods[k-1].name; return 'regular schedule'; };
-  const exchanges=[];
-  for(let k=1;k<segs.length;k++){ const sg=segs[k]; const i=Math.round((sg.s-t0)/HOUR); const prev=segs[k-1];
-    const pi=src[i]>0?periods[src[i]-1]:null, pp=src[i-1]>0?periods[src[i-1]-1]:null;
-    let why, kind='regular';
-    if(pp&&pp.pri===0){why=pp.name+' ends';kind='change';} else if(pi&&pi.pri===0){why=pi.name+' begins';kind='change';}
-    else if(pi){why=pi.name+' begins';kind='period';} else if(src[i]===-1){why='day limit rule';kind='limit';} else if(pp){why=pp.name+' ends';kind='period';} else if(src[i-1]===-1){why='day limit rule';kind='limit';} else why=(inWeekly(sg.s)?'local schedule':'long distance schedule');
-    exchanges.push({t:sg.s,from:prev.p,to:sg.p,why,kind}); }
-  const summary=[];
-  for(let y=y0;y<y0+years;y++){
-    const a=Math.max(t0,utc(y,1,1)), b=utc(y+1,1,1); const ia=Math.round((a-t0)/HOUR), ib=Math.round((b-t0)/HOUR);
-    let mh=0,fh=0,moved=0; for(let i=ia;i<ib;i++){ if(par[i]===1)mh++; else fh++; if(src[i]===-1)moved++; }
-    const ex=exchanges.filter(x=>x.t>=a&&x.t<b).length;
-    const runs=segs.filter(sg=>sg.e>a&&sg.s<b);
-    const lm=Math.max(0,...runs.filter(r=>r.p==='M').map(r=>r.h)), lf=Math.max(0,...runs.filter(r=>r.p==='F').map(r=>r.h));
-    const over=segs.filter(sg=>sg.h>limitH&&sg.s>=a&&sg.s<b);
-    summary.push({y,mDays:mh/24,fDays:fh/24,ex,lm:lm/24,lf:lf/24,over,moved:moved/24});
-  }
-  const over=segs.filter(sg=>sg.h>limitH);
-  const days={};
-  for(let t=utc(y0,1,1);t<t1;t=addD(t,1)){
-    const i0=Math.round((t-t0)/HOUR); let m=0,f=0,hol=false,cap=false,first=null,firstH=0,second=null; const cnt={};
-    for(let k=0;k<24;k++){ const i=i0+k; if(i<0||i>=N)continue; const p=R[par[i]]; if(first===null){first=p} if(p===first&&second===null)firstH++; else if(second===null)second=p; if(p==='M')m++; else f++; if(src[i]>0){hol=true;cnt[src[i]]=(cnt[src[i]]||0)+1;} if(src[i]===-1)cap=true; }
-    if(first===null)continue;
-    let pname=null,ppri=null,pwho=null,chg=null; let best=0; for(const [k,v] of Object.entries(cnt)){ const p=periods[+k-1]; if(p.pri===0)chg=p.name; if(v>best&&p.pri>0){best=v; pname=p.name; ppri=p.pri; pwho=p.who;} }
-    if(!pname&&chg){pname=chg;ppri=0;}
-    const bad=over.some(sg=>sg.s<t+DAYMS&&sg.e>t);
-    const ex=exchanges.some(x=>x.t>=t&&x.t<t+DAYMS);
-    days[ymd(t)]={first,second,firstH,m,f,hol,cap,bad,ex,pname,ppri,pwho,chg};
-  }
-  return {t0,t1,y0,years,segs,exchanges,summary,over,days,periods,limitH,movedH,ldStart:(weeklyPhase&&begins!=='never')?ldStart:null,ldEnd,weeklyPhase,begins,noMove,inLocal:inWeekly};
-}
+// The schedule engine is in engine.js (shared with the server); it defines CCEngine.
+const {HOUR,DAYMS,utc,addD,ymd,hm,DOWN,dow,parseDate,parseHours,CAT,PLANSET,WEEKLY_PLAN,whoFor,parsePeriods,periodsFor,computeSchedule}=CCEngine;
 
 // ===================== App =====================
 const $=id=>document.getElementById(id);
@@ -469,7 +297,7 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;',
 const MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONS=MON.map(m=>m.slice(0,3));
 const COLORS=['blue','orange','green','purple','teal','pink'];
-const PRESETS={'ld':{pattern:'21,11',first:'F',xtime:'12:00',nm:'Long-distance blocks',ds:'21 / 11 days',bar:'MMMMMMMFFFF'},'7-7':{pattern:'7,7',first:'M',xtime:'17:00',nm:'Week on, week off',ds:'7 / 7',bar:'MMMMMMMFFFFFFF'},'2-2-3':{pattern:'2,2,3,2,2,3',first:'M',xtime:'17:00',nm:'2-2-3',ds:'two-week repeat',bar:'MMFFMMMFFMMFFF'},'2-2-5-5':{pattern:'2,2,5,5',first:'M',xtime:'17:00',nm:'2-2-5-5',ds:'two-week repeat',bar:'MMFFMMMMMFFFFF'},'3-4-4-3':{pattern:'3,4,4,3',first:'M',xtime:'17:00',nm:'3-4-4-3',ds:'two-week repeat',bar:'MMMFFFFFFFFMMM'},'5-2':{pattern:'5,2',first:'M',xtime:'17:00',nm:'Every weekend',ds:'5 / 2',bar:'MMMMMFF'},'custom':{nm:'Custom',ds:'type the days',bar:'MMMMFF'}};
+const PRESETS={'ld':{roleDays:{mother:21,father:11},first:'father',xtime:'12:00',nm:'Long-distance blocks',ds:'21 mother / 11 father',bar:'MMMMMMMFFFF'},'7-7':{pattern:'7,7',first:'M',xtime:'17:00',nm:'Week on, week off',ds:'7 / 7',bar:'MMMMMMMFFFFFFF'},'2-2-3':{pattern:'2,2,3,2,2,3',first:'M',xtime:'17:00',nm:'2-2-3',ds:'two-week repeat',bar:'MMFFMMMFFMMFFF'},'2-2-5-5':{pattern:'2,2,5,5',first:'M',xtime:'17:00',nm:'2-2-5-5',ds:'two-week repeat',bar:'MMFFMMMMMFFFFF'},'3-4-4-3':{pattern:'3,4,4,3',first:'M',xtime:'17:00',nm:'3-4-4-3',ds:'two-week repeat',bar:'MMMFFFFFFFFMMM'},'5-2':{pattern:'5,2',first:'M',xtime:'17:00',nm:'Every weekend',ds:'5 / 2',bar:'MMMMMFF'},'custom':{nm:'Custom',ds:'type the days',bar:'MMMMFF'}};
 const uid=()=>Math.random().toString(36).slice(2,9);
 const fmt1=n=>(Math.round(n*10)/10).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:1});
 const fD=t=>{const d=new Date(t);return `${DOWN[d.getUTCDay()]} ${MONS[d.getUTCMonth()]} ${d.getUTCDate()}`};
@@ -478,20 +306,25 @@ const fDL=t=>{const d=new Date(t);return `${['Sunday','Monday','Tuesday','Wednes
 const fDT=t=>`${fD(t)} ${hm(t)}`;
 const nowT=()=>{const d=new Date();return utc(d.getFullYear(),d.getMonth()+1,d.getDate(),d.getHours())};
 const todayT=()=>{const d=new Date();return utc(d.getFullYear(),d.getMonth()+1,d.getDate())};
-const PN=code=>STATE.parents[code].name;
+const PN=code=>CCEngine.slotName(STATE,code);
+const ROLES=[['mother','the mother'],['father','the father'],['parent','a parent (no Mother\'s or Father\'s Day default)']];
+const resolveWho=w=>CCEngine.resolveWho(w,STATE);
+const hName=h=>CCEngine.entryName(h,STATE);
 const PI=code=>(STATE.parents[code].name||code).trim().slice(0,1).toUpperCase();
-const whoText=w=>w==='M'?PN('M'):w==='F'?PN('F'):w==='Modd'?`${PN('M')} odd years, ${PN('F')} even`:`${PN('M')} even years, ${PN('F')} odd`;
+const whoText=w0=>{const w=resolveWho(w0);return w==='M'?PN('M'):w==='F'?PN('F'):w==='Modd'?`${PN('M')} odd years, ${PN('F')} even`:`${PN('M')} even years, ${PN('F')} odd`;};
 const WHO_OPTS=()=>[['M',PN('M')],['F',PN('F')],['Modd',`${PN('M')} odd years / ${PN('F')} even`],['Meven',`${PN('M')} even years / ${PN('F')} odd`]];
 
 // ----- state -----
+// Presets written in role words become a slot pattern: the pattern's first number is always Parent 1's days.
+function presetPattern(p){ if(!p.roleDays)return p.pattern; const mom=resolveWho('mother'); return mom==='M'?`${p.roleDays.mother},${p.roleDays.father}`:`${p.roleDays.father},${p.roleDays.mother}`; }
 function planDefaults(){
   const d=new Date(); const startYm=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
-  const holidays={}; for(const id of ['mothers','fathers','thanksus','prexmas','xmasper','nyper','febtime','maytime']){ const h=CAT.find(x=>x.id===id); holidays[id]={on:true,...(h.plan||{who:'Modd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[id]||{}),dates:'',applies:h.sameCity?'local':'both'}; }
+  const holidays={}; for(const id of ['mothers','fathers','thanksus','prexmas','xmasper','nyper','febtime','maytime']){ const h=CAT.find(x=>x.id===id); holidays[id]={on:true,...(h.plan||{who:'motherOdd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[id]||{}),dates:'',applies:h.sameCity?'local':'both'}; }
   return {v:5,setupDone:false,
-    parents:{M:{name:'Mother',color:'blue'},F:{name:'Father',color:'orange'}},
-    children:[{id:'child',name:'',md:'',who:'Modd',before:0,after:2,start:'16:00',end:'10:00',on:true,applies:'both'}],
+    parents:{M:{name:'',color:'blue',role:'mother'},F:{name:'',color:'orange',role:'father'}},
+    children:[{id:'child',name:'',md:'',who:'motherOdd',before:0,after:2,start:'16:00',end:'10:00',on:true,applies:'both'}],
     pbd:{M:{on:false,md:'',before:0,after:1,start:'16:00',end:'10:00'},F:{on:false,md:'',before:0,after:1,start:'16:00',end:'10:00'}},
-    regular:{on:true,preset:'ld',pattern:'21,11',first:'F',xtime:'12:00',place:''},
+    regular:{on:true,preset:'ld',pattern:'21,11',first:'father',xtime:'12:00',place:''},
     phase:{begins:'move',move:'',movePre:5,ldDate:'',ldEnd:'',weeklyOn:true,weekAnchor:'2026-12-28',weeksPerCycle:2,weekly:{rows:WEEKLY_PLAN.map(r=>({...r})),place:''}},
     holidays, customs:[],
     vacations:{allow:{M:14,F:14},notice:30,maxLen:14,list:[]},
@@ -520,33 +353,13 @@ function loadState(){
   const m=migrateOld(); if(m){STATE=m; UI.note='Your earlier settings were carried over.'; saveState(); return;}
   STATE=planDefaults();
 }
-function upgradeState(s){ if(s.phase.ldEnd==null)s.phase.ldEnd=''; if(!s.phase.weeksPerCycle)s.phase.weeksPerCycle=2; for(const [id,h] of Object.entries(s.holidays)){ if(!h.applies){ const c=CAT.find(x=>x.id===id); h.applies=c&&c.sameCity?'local':'both'; } } return s; }
+function upgradeState(s){ for(const k of ['M','F']){ if(!s.parents[k].role)s.parents[k].role=k==='M'?'mother':'father'; } if(s.phase.ldEnd==null)s.phase.ldEnd=''; if(!s.phase.weeksPerCycle)s.phase.weeksPerCycle=2; for(const [id,h] of Object.entries(s.holidays)){ if(!h.applies){ const c=CAT.find(x=>x.id===id); h.applies=c&&c.sameCity?'local':'both'; } } return s; }
 function saveState(){ try{localStorage.setItem('cc5',JSON.stringify(STATE));}catch(e){} }
 function shareLink(){ const s=btoa(unescape(encodeURIComponent(JSON.stringify(STATE)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); return location.origin+location.pathname+'#s='+s; }
 
-// ----- config for the engine -----
-function toConfig(withChanges){
-  const S=STATE; const birthdays={};
-  S.children.forEach((c,i)=>{ birthdays['child'+i]={on:!!c.on&&!!(c.md||'').trim(),name:(c.name?c.name+"'s":"Child's")+' birthday',md:c.md,who:c.who,before:c.before,after:c.after,start:c.start,end:c.end,applies:c.applies||'both'}; });
-  for(const k of ['M','F']){ const b=S.pbd[k]; birthdays['p'+k]={on:!!b.on&&!!(b.md||'').trim(),name:PN(k)+"'s birthday",md:b.md,who:k,before:b.before,after:b.after,start:b.start,end:b.end,applies:b.applies||'both'}; }
-  const customs=S.customs.map(c=>({...c,kind:'custom'}));
-  for(const v of S.vacations.list){ if(!v.s||!v.e)continue; customs.push({name:v.note?`${PN(v.who)}'s vacation: ${v.note}`:`${PN(v.who)}'s vacation`,who:v.who,dates:`${v.s} ${v.sh||'10:00'} to ${v.e} ${v.eh||'10:00'}`,pri:3,kind:'vacation',applies:v.applies||'both'}); }
-  if(withChanges) for(const ch of S.changes){ const p=changePeriod(ch); if(p) customs.push({name:ch.note||'One-time change',who:p.who,dates:`${ymd(p.s)} ${hm(p.s)} to ${ymd(p.e)} ${hm(p.e)}`,pri:0,kind:'change',applies:ch.applies||'both'}); }
-  const holidays={}; for(const [id,h] of Object.entries(S.holidays)) if(h.on) holidays[id]={...h,on:true};
-  const begins=S.regular.on?S.phase.begins:'never';
-  return {start:S.cal.start,years:S.cal.years,limit:S.cal.limit,mode:S.cal.mode,
-    pattern:String(S.regular.pattern||'').split(/[,\s/-]+/).filter(Boolean),first:S.regular.first,xtime:S.regular.xtime||'12:00',
-    begins,move:S.phase.move||null,movePre:+S.phase.movePre||0,ldDate:S.phase.ldDate||null,ldEnd:S.phase.ldEnd||null,weeklyOn:!!S.phase.weeklyOn,weekly:S.phase.weekly.rows,weeksPerCycle:+S.phase.weeksPerCycle||2,weekAnchor:S.phase.weekAnchor,
-    holidays,birthdays,customs};
-}
-// A one-time change becomes a short period with priority 0. 'move': an exchange at old date/time happens at a new date/time instead. 'give': a period goes to one parent.
-function changePeriod(ch){
-  if(ch.kind==='give'){ const s=parseDate(ch.s), e=parseDate(ch.e); if(s===null||e===null)return null; const S=s+parseHours(ch.sh)*HOUR, E=e+parseHours(ch.eh)*HOUR; return E>S?{s:S,e:E,who:ch.who}:null; }
-  const od=parseDate(ch.date), nd=parseDate(ch.newDate||ch.date); if(od===null||nd===null)return null;
-  const o=od+parseHours(ch.time)*HOUR, n=nd+parseHours(ch.newTime)*HOUR; if(o===n)return null;
-  const x=BASE&&BASE.exchanges.find(x=>x.t===o); if(!x)return null;
-  return n>o?{s:o,e:n,who:x.from}:{s:n,e:o,who:x.to};
-}
+// ----- config for the engine (engine.js does the work; the page passes its state) -----
+function toConfig(withChanges){ return CCEngine.configFrom(STATE,withChanges,BASE); }
+function changePeriod(ch){ return CCEngine.changePeriod(ch,BASE); }
 let BASE=null, RESULT=null, ERR=null;
 function rebuild(){
   ERR=null;
@@ -570,7 +383,7 @@ const UI={place:'cal',view:'month',cur:null,sel:null,section:'people',step:1,ope
 function periodText(entry,cfg,y){ const list=periodsFor(entry,cfg,y,entry.rule?entry.rule(y):entry.day(y)); if(!list.length)return `${y}: no dates`; return list.map(p=>`${y}: ${fD(p.s)} ${hm(p.s)} to ${fD(p.e)} ${hm(p.e)}, ${PN(p.who)}`).join('; '); }
 function holRowText(h,cfg){ const Y=new Date().getFullYear(); return [Y,Y+1].map(y=>periodText(h,cfg,y)).join(' · '); }
 function childText(c){ const m=/^(\d{1,2})-(\d{1,2})$/.exec((c.md||'').trim()); if(!m)return 'no birthday entered'; const Y=new Date().getFullYear(); const entry={name:'b',pri:1,day:y=>utc(y,+m[1],+m[2])}; return [Y,Y+1].map(y=>periodText(entry,c,y)).join(' · '); }
-function regularText(){ const r=STATE.regular; if(!r.on)return 'not used'; const pat=String(r.pattern).split(/[,\s/-]+/).filter(Boolean); const parts=[]; pat.forEach((n,k)=>{ const who=(k%2===0)?'M':'F'; parts.push(`${n} with ${PN(who)}`); }); let s=parts.join(', '); if(r.first==='F')s+=` (starts with ${PN('F')})`; return `${s}, exchanges at ${r.xtime}`; }
+function regularText(){ const r=STATE.regular; if(!r.on)return 'not used'; const pat=String(r.pattern).split(/[,\s/-]+/).filter(Boolean); const parts=[]; pat.forEach((n,k)=>{ const who=(k%2===0)?'M':'F'; parts.push(`${n} with ${PN(who)}`); }); let s=parts.join(', '); if(resolveWho(r.first)==='F')s+=` (starts with ${PN('F')})`; return `${s}, exchanges at ${r.xtime}`; }
 function phaseText(){ const p=STATE.phase; const ret=p.ldEnd&&STATE.regular.on&&p.weeklyOn?`; local again from ${fDY(parseDate(p.ldEnd))}`:''; if(!STATE.regular.on)return p.weeklyOn?'Local schedule only':'No schedule in force'; if(!p.weeklyOn&&p.begins!=='start')return 'Long distance schedule only (local schedule off)'; if(p.begins==='start')return 'Long distance from the calendar start'+ret; if(p.begins==='date')return p.ldDate?`Local until ${fDY(parseDate(p.ldDate))}, then long distance${ret}`:'Long distance start date missing'; if(!p.move)return 'Move date not entered: local schedule shows'; return `Local until ${p.movePre} days before the move (${fDY(parseDate(p.move))}), then long distance${ret}`; }
 function localText(){ const p=STATE.phase; if(!p.weeklyOn)return 'not used'; const n=p.weekly.rows.length; return `${p.weeksPerCycle||2}-week cycle, ${n} period${n===1?'':'s'}, Week A from ${p.weekAnchor||'(no date)'}`; }
 const APPLIES=[['both','Both schedules'],['ld','Long distance schedule only'],['local','Local schedule only']];
@@ -699,7 +512,7 @@ function renderSet(){ renderNav(); renderEdit(); const bn=$('setBanner'); bn.inn
 function renderNav(){ $('setNav').innerHTML=SECTIONS.map((x,i)=>`<button aria-selected="${x.id===UI.section}" data-sec="${x.id}"><span class="num">${i+1}</span><span><span class="t">${esc(x.t)}</span><br><span class="s">${esc(x.s())}</span></span></button>`).join(''); }
 function fld(label,inner){ return `<div class="field"><span class="lbl">${label}</span>${inner}</div>`; }
 function inp(path,opts={}){ const v=getPath(path); const t=opts.type||'text'; return `<input type="${t}" data-b="${path}"${opts.num?' data-t="num"':''} value="${esc(v==null?'':v)}"${opts.ph?` placeholder="${esc(opts.ph)}"`:''}${t==='time'?' step="3600"':''}${opts.min!=null?` min="${opts.min}"`:''}${opts.max!=null?` max="${opts.max}"`:''}>`; }
-function sel(path,options,opts={}){ const v=getPath(path); return `<select data-b="${path}"${opts.num?' data-t="num"':''}>${options.map(([val,l])=>`<option value="${val}"${String(val)===String(v)?' selected':''}>${esc(l)}</option>`).join('')}</select>`; }
+function sel(path,options,opts={}){ let v=getPath(path); if(CCEngine.ROLE_TOKENS.includes(v))v=resolveWho(v); return `<select data-b="${path}"${opts.num?' data-t="num"':''}>${options.map(([val,l])=>`<option value="${val}"${String(val)===String(v)?' selected':''}>${esc(l)}</option>`).join('')}</select>`; }
 function chk(path,label){ return `<label class="field check"><input type="checkbox" data-b="${path}" data-t="bool"${getPath(path)?' checked':''}> <span>${label}</span></label>`; }
 function endInp(path){ const v=getPath(path); const eod=v==='24:00'; return `<span class="row" style="gap:6px"><input type="time" data-b="${path}" value="${eod?'00:00':esc(v)}" step="3600"${eod?' disabled':''}><label class="small row" style="gap:4px"><input type="checkbox" data-b="${path}" data-t="eod"${eod?' checked':''}> end of day</label></span>`; }
 function periodFields(base){ return `<div class="form tight">${fld('Goes to',sel(base+'.who',WHO_OPTS()))}${fld('Days before',inp(base+'.before',{type:'number',num:true,min:0,max:60}))}${fld('Days after',inp(base+'.after',{type:'number',num:true,min:0,max:60}))}${fld('Starts at',inp(base+'.start',{type:'time'}))}${fld('Ends at',endInp(base+'.end'))}${fld('Applies under',sel(base+'.applies',APPLIES))}</div>`; }
@@ -709,11 +522,12 @@ function colorPicker(code){ return `<div class="swatches" role="group" aria-labe
 function secHtml(id){
   const S=STATE;
   switch(id){
-  case 'people': return `<div class="head"><div><h2>Parents and children</h2><p class="muted">Names and colors are used everywhere. Birthdays become calendar entries.</p></div></div>
-    <div class="form four">${fld('Parent 1',inp('parents.M.name'))}${fld('Color',colorPicker('M'))}${fld('Parent 2',inp('parents.F.name'))}${fld('Color',colorPicker('F'))}</div>
+  case 'people': { const same=S.parents.M.role===S.parents.F.role&&S.parents.M.role!=='parent'; return `<div class="head"><div><h2>Parents and children</h2><p class="muted">Names and colors are used everywhere. Who is the mother and who is the father decides the defaults: Mother's Day, Father's Day, the parenting plan periods and who the first block goes to. Either parent can be Parent 1.</p></div></div>
+    <div class="form four">${fld('Parent 1',inp('parents.M.name',{ph:'Name'}))}${fld('Parent 1 is',sel('parents.M.role',ROLES))}${fld('Color',colorPicker('M'))}<span></span>${fld('Parent 2',inp('parents.F.name',{ph:'Name'}))}${fld('Parent 2 is',sel('parents.F.role',ROLES))}${fld('Color',colorPicker('F'))}<span></span></div>
+    ${same?`<div class="notice warn">Both parents are marked as ${esc(S.parents.M.role)}. Mother's Day, Father's Day and the plan defaults then follow Parent 1. Set one of them to the other role.</div>`:''}
     <div class="list">${S.children.map((c,i)=>`<div class="item"><input type="checkbox" data-b="children.${i}.on" data-t="bool"${c.on?' checked':''} aria-label="Use this birthday"><div><div class="form tight">${fld('Child',inp(`children.${i}.name`,{ph:'Name'}))}${fld('Birthday (MM-DD)',inp(`children.${i}.md`,{ph:'MM-DD'}))}</div><div class="res" style="margin-top:6px">${esc(childText(c))}</div><details class="help" style="margin-top:6px"><summary>Birthday period settings</summary>${periodFields(`children.${i}`)}</details></div><button class="btn sm danger" data-act="rmChild" data-arg="${i}">Remove</button></div>`).join('')}
     ${['M','F'].map(k=>`<div class="item"><input type="checkbox" data-b="pbd.${k}.on" data-t="bool"${S.pbd[k].on?' checked':''} aria-label="Use this birthday"><div><div class="form tight">${fld(`${esc(PN(k))}'s birthday (MM-DD)`,inp(`pbd.${k}.md`,{ph:'MM-DD'}))}</div>${S.pbd[k].on&&S.pbd[k].md?`<div class="res" style="margin-top:6px">${esc(childText({...S.pbd[k],who:k}))}</div>`:''}<details class="help" style="margin-top:6px"><summary>Birthday period settings</summary><div class="form tight">${fld('Days before',inp(`pbd.${k}.before`,{type:'number',num:true,min:0,max:60}))}${fld('Days after',inp(`pbd.${k}.after`,{type:'number',num:true,min:0,max:60}))}${fld('Starts at',inp(`pbd.${k}.start`,{type:'time'}))}${fld('Ends at',endInp(`pbd.${k}.end`))}${fld('Applies under',sel(`pbd.${k}.applies`,APPLIES))}</div></details></div><span></span></div>`).join('')}</div>
-    <button class="btn sm" style="align-self:flex-start" data-act="addChild">+ Add a child</button>`;
+    <button class="btn sm" style="align-self:flex-start" data-act="addChild">+ Add a child</button>`; }
   case 'regular': return `<div class="head"><div><h2>Long Distance Schedule</h2><p class="muted">The block pattern used while the parents live apart. When it is in force is set under "Which schedule is in force".</p></div></div>
     ${chk('regular.on','Use the long distance schedule')}
     <div class="tpl">${Object.entries(PRESETS).map(([k,p])=>`<button type="button" aria-pressed="${S.regular.preset===k}" data-act="preset" data-arg="${k}"><span class="bar">${[...p.bar].map(c=>`<i class="${c}"></i>`).join('')}</span><span class="nm">${esc(p.nm)}</span><span class="ds">${esc(p.ds)}</span></button>`).join('')}</div>
@@ -739,10 +553,10 @@ function secHtml(id){
     ${stripHtml()}`; }
   case 'hol': { const groups=[['Parenting plan periods',CAT.filter(h=>h.region==='Plan')],['United States and Canada',CAT.filter(h=>h.region==='Both')],['United States',CAT.filter(h=>h.region==='US')],['Canada',CAT.filter(h=>h.region==='Canada')]];
     return `<div class="head"><div><h2>Holidays and birthdays</h2><p class="muted">Tick what your plan covers. Each row shows the dates it produces for this year and next, so the setting can be checked against the plan without reading the rule.</p></div></div>
-    ${groups.map(([g,list])=>`<h3>${g}</h3><div class="list">${list.map(h=>{ const cfg=S.holidays[h.id]||{on:false,...(h.plan||{who:'Modd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[h.id]||{}),dates:'',applies:h.sameCity?'local':'both'}; const open=UI.openHol===h.id; return `<div class="item${open?' open':''}"><input type="checkbox" data-act="holOn" data-arg="${h.id}"${cfg.on?' checked':''} aria-label="${esc(h.name)}"><div><b>${esc(h.name)}</b>${appliesTag(cfg.applies)} <span class="small muted">· ${esc(h.ruleText)} · ${esc(whoText(cfg.who))}</span>${cfg.on?`<div class="res">${esc(holRowText(h,cfg))}</div>`:''}</div><button class="btn sm" data-act="holEdit" data-arg="${h.id}">${open?'Close':'Edit'}</button>
+    ${groups.map(([g,list])=>`<h3>${g}</h3><div class="list">${list.map(h=>{ const cfg=S.holidays[h.id]||{on:false,...(h.plan||{who:'motherOdd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[h.id]||{}),dates:'',applies:h.sameCity?'local':'both'}; const open=UI.openHol===h.id; return `<div class="item${open?' open':''}"><input type="checkbox" data-act="holOn" data-arg="${h.id}"${cfg.on?' checked':''} aria-label="${esc(hName(h))}"><div><b>${esc(hName(h))}</b>${appliesTag(cfg.applies)} <span class="small muted">· ${esc(h.ruleText)} · ${esc(whoText(cfg.who))}</span>${cfg.on?`<div class="res">${esc(holRowText(h,cfg))}</div>`:''}</div><button class="btn sm" data-act="holEdit" data-arg="${h.id}">${open?'Close':'Edit'}</button>
       ${open?`<div class="sub">${periodFields('holidays.'+h.id)}${fld('Specific dates for some years (optional)',inp('holidays.'+h.id+'.dates',{ph:'2027-11-22 10:00 to 2027-11-29 10:00; 2028-...'}))}<p class="help">Specific dates replace the computed dates for the years you list. Several are separated by semicolons.</p></div>`:''}</div>`; }).join('')}</div>`).join('')}
     <h3>Birthdays</h3><p class="small muted">Set under Parents and children. <button class="btn sm" data-sec="people">Open</button></p>
-    <details class="help"><summary>Which wins when two overlap</summary><ol><li>One-time changes</li><li>Birthdays, ${esc(PN('M'))}'s Day, ${esc(PN('F'))}'s Day</li><li>Thanksgiving, Christmas, New Year</li><li>Vacations</li><li>Other holidays</li><li>The schedule in force (long distance or local)</li></ol></details>`; }
+    <details class="help"><summary>Which wins when two overlap</summary><ol><li>One-time changes</li><li>Birthdays, Mother's Day, Father's Day</li><li>Thanksgiving, Christmas, New Year</li><li>Vacations</li><li>Other holidays</li><li>The schedule in force (long distance or local)</li></ol></details>`; }
   case 'vac': { const V=S.vacations; const Y=new Date().getFullYear(); return `<div class="head"><div><h2>Vacations</h2><p class="muted">The allowance from the plan, and the vacations actually planned. A vacation takes time from the other parent's regular schedule; holidays still win.</p></div><button class="btn sm primary" data-act="addVac">+ Add a vacation</button></div>
     <div class="form four">${fld(`${esc(PN('M'))}, days a year`,inp('vacations.allow.M',{type:'number',num:true,min:0}))}${fld(`${esc(PN('F'))}, days a year`,inp('vacations.allow.F',{type:'number',num:true,min:0}))}${fld('Notice required (days)',inp('vacations.notice',{type:'number',num:true,min:0}))}${fld('Longest single vacation (days)',inp('vacations.maxLen',{type:'number',num:true,min:0}))}</div>
     <div class="row small muted">${[Y,Y+1].map(y=>`<span class="pill">${y}: ${esc(PN('M'))} ${fmt1(vacUsed('M',y))} of ${V.allow.M} · ${esc(PN('F'))} ${fmt1(vacUsed('F',y))} of ${V.allow.F}</span>`).join('')}</div>
@@ -778,7 +592,7 @@ function renderEdit(){ $('setEdit').innerHTML=secHtml(UI.section)+`<div class="f
 
 // ===================== Setup place =====================
 const STEPS=[['Who','people'],['Long distance','regular'],['Local','local'],['In force','change'],['Holidays','hol'],['Vacations','vac'],['Limits','limits'],['Finish','review']];
-function reviewHtml(){ const S=STATE; const hol=Object.entries(S.holidays).filter(([,h])=>h.on).map(([id])=>CAT.find(h=>h.id===id).name); return `<div class="head"><div><h2>${STEPS.length}. Check and finish</h2><p class="muted">Everything here can be changed later from Settings. Tap a line to go back to it.</p></div></div>
+function reviewHtml(){ const S=STATE; const hol=Object.entries(S.holidays).filter(([,h])=>h.on).map(([id])=>hName(CAT.find(h=>h.id===id))); return `<div class="head"><div><h2>${STEPS.length}. Check and finish</h2><p class="muted">Everything here can be changed later from Settings. Tap a line to go back to it.</p></div></div>
   <div class="review"><dl>
    <dt><a href="#" data-step="1">Parents</a></dt><dd><span class="who M">${esc(PN('M'))}</span> &nbsp; <span class="who F">${esc(PN('F'))}</span></dd>
    <dt><a href="#" data-step="1">Children</a></dt><dd>${S.children.filter(c=>c.on).map(c=>`${esc(c.name||'child')}, birthday ${esc(c.md||'not set')}`).join('; ')||'none'}</dd>
@@ -804,6 +618,7 @@ function rerender(){ rebuild(); render(); }
 
 document.addEventListener('change',e=>{
   const t=e.target; if(!bindInput(t))return;
+  if(/^parents\.[MF]\.role$/.test(t.dataset.b)){ const p=PRESETS[STATE.regular.preset]; if(p&&p.roleDays)STATE.regular.pattern=presetPattern(p); }
   // a holiday edited while unticked turns on
   const m=/^holidays\.([^.]+)\./.exec(t.dataset.b); if(m&&STATE.holidays[m[1]])STATE.holidays[m[1]].on=true;
   rerender();
@@ -828,13 +643,13 @@ document.addEventListener('click',async e=>{
     case 'addVacHere': { const id=uid(); const s=parseDate(arg); S.vacations.list.push({id,who:'M',s:arg,sh:'10:00',e:ymd(addD(s,7)),eh:'10:00',note:''}); UI.openVac=id; rerender(); go('set','vac'); return; }
     case 'giveHere': { const id=uid(); const s=parseDate(arg); const info=dayCell(arg); const other=info?(info.first==='M'?'F':'M'):'M'; S.changes.push({id,kind:'give',who:other,s:arg,sh:'00:00',e:ymd(addD(s,1)),eh:'00:00',note:''}); UI.openChg=id; rerender(); go('set','changes'); return; }
     case 'color': { const [code,c]=arg.split(':'); S.parents[code].color=c; const o=code==='M'?'F':'M'; if(S.parents[o].color===c)S.parents[o].color=COLORS.find(x=>x!==c); rerender(); return; }
-    case 'addChild': S.children.push({id:uid(),name:'',md:'',who:'Modd',before:0,after:1,start:'16:00',end:'10:00',on:true}); rerender(); return;
+    case 'addChild': S.children.push({id:uid(),name:'',md:'',who:'motherOdd',before:0,after:1,start:'16:00',end:'10:00',on:true}); rerender(); return;
     case 'rmChild': S.children.splice(+arg,1); rerender(); return;
-    case 'preset': { const p=PRESETS[arg]; S.regular.preset=arg; S.regular.on=true; if(p.pattern){S.regular.pattern=p.pattern;S.regular.first=p.first;S.regular.xtime=p.xtime;} rerender(); return; }
-    case 'addRow': S.phase.weekly.rows.push({week:1,parent:'F',sd:5,st:'17:00',ed:0,et:'17:00'}); rerender(); return;
+    case 'preset': { const p=PRESETS[arg]; S.regular.preset=arg; S.regular.on=true; const pat=presetPattern(p); if(pat){S.regular.pattern=pat;S.regular.first=p.first;S.regular.xtime=p.xtime;} rerender(); return; }
+    case 'addRow': S.phase.weekly.rows.push({week:1,parent:'father',sd:5,st:'17:00',ed:0,et:'17:00'}); rerender(); return;
     case 'rmRow': S.phase.weekly.rows.splice(+arg,1); rerender(); return;
-    case 'holOn': { const h=CAT.find(x=>x.id===arg); if(!S.holidays[arg])S.holidays[arg]={on:false,...(h.plan||{who:'Modd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[arg]||{}),dates:'',applies:h.sameCity?'local':'both'}; S.holidays[arg].on=b.checked; rerender(); return; }
-    case 'holEdit': { const h=CAT.find(x=>x.id===arg); if(!S.holidays[arg])S.holidays[arg]={on:false,...(h.plan||{who:'Modd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[arg]||{}),dates:'',applies:h.sameCity?'local':'both'}; UI.openHol=UI.openHol===arg?null:arg; render(); return; }
+    case 'holOn': { const h=CAT.find(x=>x.id===arg); if(!S.holidays[arg])S.holidays[arg]={on:false,...(h.plan||{who:'motherOdd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[arg]||{}),dates:'',applies:h.sameCity?'local':'both'}; S.holidays[arg].on=b.checked; rerender(); return; }
+    case 'holEdit': { const h=CAT.find(x=>x.id===arg); if(!S.holidays[arg])S.holidays[arg]={on:false,...(h.plan||{who:'motherOdd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[arg]||{}),dates:'',applies:h.sameCity?'local':'both'}; UI.openHol=UI.openHol===arg?null:arg; render(); return; }
     case 'addVac': { const id=uid(); const s=addD(todayT(),S.vacations.notice||30); S.vacations.list.push({id,who:'M',s:ymd(s),sh:'10:00',e:ymd(addD(s,7)),eh:'10:00',note:''}); UI.openVac=id; rerender(); return; }
     case 'vacEdit': UI.openVac=UI.openVac===arg?null:arg; render(); return;
     case 'rmVac': S.vacations.list.splice(+arg,1); rerender(); return;
@@ -856,14 +671,7 @@ document.addEventListener('click',async e=>{
 });
 
 // ----- exports (unchanged from the earlier page) -----
-const icsDate=t=>new Date(t).toISOString().replace(/[-:]/g,'').slice(0,15);
-function ics(){
-  const r=RESULT; const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//custody-calendar.com//planner//EN','CALSCALE:GREGORIAN'];
-  const ev=(uid,s,e,sum,desc)=>{L.push('BEGIN:VEVENT',`UID:${uid}@custody-calendar.com`,`DTSTAMP:${icsDate(Date.now())}Z`,`DTSTART:${icsDate(s)}`,`DTEND:${icsDate(e)}`,`SUMMARY:${sum}`);if(desc)L.push(`DESCRIPTION:${desc}`);L.push('END:VEVENT');};
-  r.segs.forEach((sg,i)=>ev('blk'+i+'-'+icsDate(sg.s),sg.s,sg.e,`With ${PN(sg.p)}`,`${fmt1(sg.h/24)} days`));
-  r.exchanges.forEach((x,i)=>ev('ex'+i+'-'+icsDate(x.t),x.t,x.t+30*60000,`Exchange: ${PN(x.from)} to ${PN(x.to)}`,x.why));
-  L.push('END:VCALENDAR'); return L.join('\r\n');
-}
+function ics(){ return CCEngine.icsText(RESULT,{M:PN('M'),F:PN('F')},{name:'Custody Calendar'}); }
 const usDate=t=>{const d=new Date(t);return `${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')}/${d.getUTCFullYear()}`};
 const usTime=t=>{const d=new Date(t);let h=d.getUTCHours();const ap=h>=12?'PM':'AM';h=h%12||12;return `${h}:${String(d.getUTCMinutes()).padStart(2,'0')} ${ap}`};
 function csv(){

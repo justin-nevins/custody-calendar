@@ -1,0 +1,160 @@
+/// <reference path="../pb_data/types.d.ts" />
+// Shared helpers for cc.pb.js. PocketBase runs every route handler in its own JS runtime, so helpers live in a
+// module that each handler requires; top-level functions of a *.pb.js file are not visible inside handlers.
+// Custody Calendar account routes. Every write to families, members, proposals and events goes through here, so the
+// rules (who may approve, what a proposal may change, what the record says) live in one place and run on the server.
+// The schedule engine is the same file the page uses (engine.js, copied next to this file by the deploy).
+
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O or 1/I
+
+function engine() { return require(`${__hooks}/engine.js`); }
+
+function bad(msg, code) { throw new BadRequestError(msg || "Bad request", code ? { code } : undefined); }
+
+function emailOk(s) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) && s.length <= 254; }
+
+function body(e) { return e.requestInfo().body || {}; }
+
+function newCode() {
+  const a = $security.randomStringWithAlphabet(4, CODE_ALPHABET), b = $security.randomStringWithAlphabet(4, CODE_ALPHABET);
+  return `${a}-${b}`;
+}
+
+function parentName(settings, role) {
+  const p = settings && settings.parents && settings.parents[role];
+  return (p && p.name) || (role === "M" ? "Mother" : "Father");
+}
+
+function memberOf(app, userId) {
+  const rows = app.findRecordsByFilter("members", "user = {:u}", "-created", 1, 0, { u: userId });
+  return rows.length ? rows[0] : null;
+}
+
+function membersOf(app, familyId) {
+  return app.findRecordsByFilter("members", "family = {:f}", "created", 10, 0, { f: familyId });
+}
+
+function otherMember(app, familyId, memberId) {
+  return membersOf(app, familyId).find((m) => m.id !== memberId) || null;
+}
+
+function userEmail(app, userId) {
+  try { return app.findRecordById("users", userId).email(); } catch (_) { return null; }
+}
+
+// Clone through JSON so a stored settings object is never mutated in place.
+function clone(x) { return JSON.parse(JSON.stringify(x)); }
+// JSON fields come out of a record as raw bytes in the hooks runtime; read them as text and parse.
+function jget(rec, field) { const t = rec.getString(field); return t ? JSON.parse(t) : null; }
+
+// The one-time changes and vacations are edited item by item; everything else is "the settings".
+function applyProposal(settings, kind, payload) {
+  let s = clone(settings);
+  if (kind === "settings") {
+    if (!payload || typeof payload.settings !== "object") bad("The proposal has no settings.");
+    const next = clone(payload.settings);
+    next.changes = s.changes || [];
+    next.vacations = next.vacations || {};
+    next.vacations.list = (s.vacations && s.vacations.list) || [];
+    s = next;
+  } else if (kind === "change" || kind === "vacation") {
+    const item = payload && payload.item;
+    if (!item || !item.id) bad("The proposal has no item.");
+    const list = kind === "change" ? (s.changes = s.changes || []) : ((s.vacations = s.vacations || {}).list = s.vacations.list || []);
+    const i = list.findIndex((x) => x.id === item.id);
+    if (i >= 0) list[i] = item; else list.push(item);
+  } else if (kind === "remove") {
+    const list = payload && payload.list, id = payload && payload.id;
+    if (!id || (list !== "changes" && list !== "vacations")) bad("The proposal does not say what to remove.");
+    const arr = list === "changes" ? (s.changes || []) : ((s.vacations && s.vacations.list) || []);
+    const i = arr.findIndex((x) => x.id === id);
+    if (i < 0) bad("That item is no longer on the calendar.");
+    arr.splice(i, 1);
+  } else bad("Unknown proposal kind.");
+  // The calendar must still compute; the engine throws a plain sentence when it cannot.
+  try { engine().build(s); } catch (err) { bad("The calendar cannot be built with this change: " + (err && err.message ? err.message : err)); }
+  return s;
+}
+
+function addEvent(app, familyId, actorId, action, detail, proposalId, version) {
+  const r = new Record(app.findCollectionByNameOrId("events"));
+  r.set("family", familyId);
+  if (actorId) r.set("actor", actorId);
+  r.set("action", action);
+  r.set("detail", detail || "");
+  if (proposalId) r.set("proposal", proposalId);
+  if (version) r.set("version", version);
+  app.save(r);
+  return r;
+}
+
+function sendMail(to, subject, text) {
+  if (!to) return;
+  try {
+    const meta = $app.settings().meta;
+    const html = "<p>" + text.split("\n").map((l) => l.replace(/&/g, "&amp;").replace(/</g, "&lt;")).join("</p><p>") + "</p>" +
+      '<p><a href="' + meta.appURL + '/#acct">Open Custody Calendar</a></p>';
+    const m = new MailerMessage({ from: { address: meta.senderAddress, name: meta.senderName }, to: [{ address: to }], subject, html, text: text + "\n\n" + meta.appURL + "/#acct" });
+    $app.newMailClient().send(m);
+  } catch (err) {
+    console.log("mail not sent to " + to + ": " + (err && err.message ? err.message : err));
+  }
+}
+
+function familyView(app, fam, me) {
+  const members = membersOf(app, fam.id).map((m) => ({ id: m.id, role: m.getString("role"), confirmed: m.getBool("confirmed"), email: userEmail(app, m.getString("user")), me: m.id === me.id, feed: m.id === me.id ? m.getString("feed_token") : undefined }));
+  const proposals = app.findRecordsByFilter("proposals", "family = {:f}", "-created", 200, 0, { f: fam.id }).map((p) => ({
+    id: p.id, kind: p.getString("kind"), payload: jget(p, "payload"), summary: p.getString("summary"), note: p.getString("note"), proposed_by: p.getString("proposed_by"),
+    status: p.getString("status"), unconfirmed: p.getBool("unconfirmed"), decided_by: p.getString("decided_by"), decided_note: p.getString("decided_note"), decided_at: p.getString("decided_at"), created: p.getString("created"),
+  }));
+  const events = app.findRecordsByFilter("events", "family = {:f}", "-at", 300, 0, { f: fam.id }).map((ev) => ({ id: ev.id, at: ev.getString("at"), actor: ev.getString("actor"), action: ev.getString("action"), detail: ev.getString("detail"), proposal: ev.getString("proposal"), version: ev.get("version") }));
+  return { family: { id: fam.id, code: fam.getString("code"), settings: jget(fam, "settings"), version: fam.get("version"), updated: fam.getString("updated") }, me: { id: me.id, role: me.getString("role"), confirmed: me.getBool("confirmed"), feed: me.getString("feed_token") }, members, proposals, events };
+}
+
+
+// approve, decline or withdraw an open proposal
+// ---- approve, decline, withdraw ----
+function decide(e, action) {
+  const me = memberOf($app, e.auth.id);
+  if (!me) bad("You are not part of a shared calendar.");
+  const id = e.request.pathValue("id");
+  let p = null;
+  try { p = $app.findRecordById("proposals", id); } catch (_) { bad("That proposal no longer exists."); }
+  if (p.getString("family") !== me.getString("family")) bad("That proposal is not on your calendar.");
+  if (p.getString("status") !== "open") bad(`That proposal is already ${p.getString("status")}.`);
+  const mine = p.getString("proposed_by") === me.id;
+  if (action === "withdraw" && !mine) bad("Only the parent who proposed it can withdraw it.");
+  if (action !== "withdraw" && mine) bad("The other parent decides on your proposal.");
+  const note = String(body(e).note || "").trim().slice(0, 2000);
+  if (action === "decline" && !note) bad("Give a one-line reason so the other parent knows why.");
+  const fam = $app.findRecordById("families", p.getString("family"));
+  const myName = parentName(jget(fam, "settings"), me.getString("role"));
+  let out = null;
+  $app.runInTransaction((tx) => {
+    const f = tx.findRecordById("families", fam.id);
+    const pr = tx.findRecordById("proposals", p.id);
+    pr.set("decided_by", me.id); pr.set("decided_at", new Date().toISOString()); pr.set("decided_note", note);
+    if (action === "approve") {
+      const applied = applyProposal(jget(f, "settings"), pr.getString("kind"), jget(pr, "payload"));
+      const v = (f.get("version") || 1) + 1;
+      f.set("settings", applied); f.set("version", v); tx.save(f);
+      pr.set("status", "approved"); tx.save(pr);
+      addEvent(tx, f.id, me.id, "approved", `${myName} approved: ${pr.getString("summary")}` + (note ? ` ("${note}")` : ""), pr.id, v);
+    } else if (action === "decline") {
+      pr.set("status", "declined"); tx.save(pr);
+      addEvent(tx, f.id, me.id, "declined", `${myName} declined: ${pr.getString("summary")} ("${note}")`, pr.id, f.get("version"));
+    } else {
+      pr.set("status", "withdrawn"); tx.save(pr);
+      addEvent(tx, f.id, me.id, "withdrawn", `${myName} withdrew: ${pr.getString("summary")}` + (note ? ` ("${note}")` : ""), pr.id, f.get("version"));
+    }
+    out = familyView(tx, f, me);
+  });
+  const other = otherMember($app, fam.id, me.id);
+  if (other) {
+    const verb = action === "approve" ? "approved" : action === "decline" ? "declined" : "withdrew";
+    sendMail(userEmail($app, other.getString("user")), `${myName} ${verb}: ${p.getString("summary")}`, `${myName} ${verb} the proposal "${p.getString("summary")}".` + (note ? `\nNote: ${note}` : "") + (action === "approve" ? "\n\nBoth calendars now show the change." : ""));
+  }
+  return e.json(200, out);
+}
+
+module.exports = { decide, jget, CODE_ALPHABET, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, clone, applyProposal, addEvent, sendMail, familyView };
