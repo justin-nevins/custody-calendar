@@ -386,15 +386,24 @@ function diffSettings(a,b){
 const icsDate=t=>new Date(t).toISOString().replace(/[-:]/g,'').slice(0,15);
 const icsEsc=s=>String(s==null?'':s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
 const fmt1=n=>String(Math.round(n*10)/10);
+// The page's parent colors as calendar colors: a CSS color name for the per-event COLOR property (RFC 7986) and the
+// hex used for the calendar-level color some apps read on subscription.
+const CAL_COLORS={blue:{css:'steelblue',hex:'#2f6db5'},orange:{css:'chocolate',hex:'#d9772a'},green:{css:'seagreen',hex:'#2e8b57'},purple:{css:'rebeccapurple',hex:'#7a3fa5'},teal:{css:'teal',hex:'#1f8a8a'},pink:{css:'mediumvioletred',hex:'#c2457a'}};
+function parentColor(S,k){ const c=S&&S.parents&&S.parents[k]&&S.parents[k].color; return CAL_COLORS[c]||CAL_COLORS[k==='M'?'blue':'orange']; }
 // names: {M,F}. opts.name: calendar name shown by the subscribing app. opts.stamp: fixed DTSTAMP (tests).
+// opts.S: settings (exchange places, parent colors). opts.who: 'M' or 'F' gives only that parent's blocks and the
+// exchanges that hand the child to them, so each parent's time can be its own calendar with its own color.
 function icsText(r,names,opts={}){
-  const PN=k=>names[k]||k; const stamp=icsDate(opts.stamp||Date.now())+'Z';
+  const PN=k=>names[k]||k; const stamp=icsDate(opts.stamp||Date.now())+'Z'; const who=opts.who==='M'||opts.who==='F'?opts.who:null;
   const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//custody-calendar.com//planner//EN','CALSCALE:GREGORIAN'];
-  if(opts.name)L.push('X-WR-CALNAME:'+icsEsc(opts.name),'NAME:'+icsEsc(opts.name));
+  const name=opts.name?(who?`${opts.name}: ${PN(who)}'s time`:opts.name):'';
+  if(name)L.push('X-WR-CALNAME:'+icsEsc(name),'NAME:'+icsEsc(name));
+  if(who&&opts.S){ const c=parentColor(opts.S,who); L.push('X-APPLE-CALENDAR-COLOR:'+c.hex.toUpperCase(),'COLOR:'+c.css); }
   if(opts.refresh)L.push('REFRESH-INTERVAL;VALUE=DURATION:'+opts.refresh,'X-PUBLISHED-TTL:'+opts.refresh);
-  const ev=(uid,s,e,sum,desc,loc)=>{L.push('BEGIN:VEVENT',`UID:${uid}@custody-calendar.com`,`DTSTAMP:${stamp}`,`DTSTART:${icsDate(s)}`,`DTEND:${icsDate(e)}`,`SUMMARY:${icsEsc(sum)}`);if(desc)L.push(`DESCRIPTION:${icsEsc(desc)}`);if(loc)L.push(`LOCATION:${icsEsc(loc)}`);L.push('END:VEVENT');};
-  r.segs.forEach((sg,i)=>ev('blk'+i+'-'+icsDate(sg.s),sg.s,sg.e,`With ${PN(sg.p)}`,`${fmt1(sg.h/24)} days`));
-  r.exchanges.forEach((x,i)=>ev('ex'+i+'-'+icsDate(x.t),x.t,x.t+30*60000,`Exchange: ${PN(x.from)} to ${PN(x.to)}`,x.why,opts.S?exchangePlace(opts.S,r,x):''));
+  const col=k=>opts.S?parentColor(opts.S,k).css:'';
+  const ev=(uid,s,e,sum,desc,loc,color)=>{L.push('BEGIN:VEVENT',`UID:${uid}@custody-calendar.com`,`DTSTAMP:${stamp}`,`DTSTART:${icsDate(s)}`,`DTEND:${icsDate(e)}`,`SUMMARY:${icsEsc(sum)}`);if(desc)L.push(`DESCRIPTION:${icsEsc(desc)}`);if(loc)L.push(`LOCATION:${icsEsc(loc)}`);if(color)L.push(`COLOR:${color}`);L.push('END:VEVENT');};
+  r.segs.forEach((sg,i)=>{ if(who&&sg.p!==who)return; ev('blk'+i+'-'+icsDate(sg.s),sg.s,sg.e,`With ${PN(sg.p)}`,`${fmt1(sg.h/24)} days`,'',col(sg.p)); });
+  r.exchanges.forEach((x,i)=>{ if(who&&x.to!==who)return; ev('ex'+i+'-'+icsDate(x.t),x.t,x.t+30*60000,`Exchange: ${PN(x.from)} to ${PN(x.to)}`,x.why,opts.S?exchangePlace(opts.S,r,x):'',col(x.to)); });
   L.push('END:VCALENDAR'); return L.join('\r\n');
 }
 // Days whose owner differs between two results (used to mark a proposal on the calendar).
@@ -402,5 +411,5 @@ function diffDays(a,b){ const out=[]; const keys=new Set([...Object.keys(a.days)
 // Exchanges in b that are not in a, and in a not in b.
 function diffExchanges(a,b){ const key=x=>`${x.t}|${x.from}|${x.to}`; const A=new Set(a.exchanges.map(key)), B=new Set(b.exchanges.map(key)); return {added:b.exchanges.filter(x=>!A.has(key(x))),removed:a.exchanges.filter(x=>!B.has(key(x)))}; }
 
-return {HOUR,DAYMS,utc,addD,ymd,hm,usd,usdStr,DOWN,dow,parseDate,parseHours,nth,last,monBefore,monOnOrBefore,easter,fixed,CAT,PLANSET,WEEKLY_PLAN,ROLE_TOKENS,roles,resolveWho,slotName,entryName,whoFor,parsePeriods,periodsFor,computeSchedule,configFrom,changePeriod,changePeriods,changeHours,changeSummary,ofwText,build,ruleMatches,exchangePlace,applyProposal,diffSettings,stable,icsText,diffDays,diffExchanges};
+return {HOUR,DAYMS,utc,addD,ymd,hm,usd,usdStr,DOWN,dow,parseDate,parseHours,nth,last,monBefore,monOnOrBefore,easter,fixed,CAT,PLANSET,WEEKLY_PLAN,ROLE_TOKENS,roles,resolveWho,slotName,entryName,whoFor,parsePeriods,periodsFor,computeSchedule,configFrom,changePeriod,changePeriods,changeHours,changeSummary,ofwText,build,ruleMatches,exchangePlace,parentColor,CAL_COLORS,applyProposal,diffSettings,stable,icsText,diffDays,diffExchanges};
 });
