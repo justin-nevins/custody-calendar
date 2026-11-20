@@ -399,7 +399,9 @@ function childLabel(S){ const names=((S&&S.children)||[]).map(c=>(c&&c.name||'')
 function icsText(r,names,opts={}){
   const PN=k=>names[k]||k; const child=childLabel(opts.S); const withT=k=>child?`${child} with ${PN(k)}`:`With ${PN(k)}`; const stamp=icsDate(opts.stamp||Date.now())+'Z'; const who=opts.who==='M'||opts.who==='F'?opts.who:null;
   const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//custody-calendar.com//planner//EN','CALSCALE:GREGORIAN'];
-  const name=opts.name?(who?`${opts.name}: ${PN(who)}'s time`:opts.name):'';
+  // Calendar names as they appear in the subscribing app: "Justin Custody" for a parent's calendar, "Sheigh Custody"
+  // (or the given name) for the full one.
+  const name=opts.name?(who?`${PN(who)} Custody`:(child?`${child} Custody`:opts.name)):'';
   if(name)L.push('X-WR-CALNAME:'+icsEsc(name),'NAME:'+icsEsc(name));
   if(who&&opts.S){ const c=parentColor(opts.S,who); L.push('X-APPLE-CALENDAR-COLOR:'+c.hex.toUpperCase(),'COLOR:'+c.css); }
   if(opts.refresh)L.push('REFRESH-INTERVAL;VALUE=DURATION:'+opts.refresh,'X-PUBLISHED-TTL:'+opts.refresh);
