@@ -253,8 +253,10 @@ function applyProposal(settings,kind,payload){
 }
 // What differs between two settings objects, by section, plus the items added, edited or removed.
 const SECTION_KEYS={people:s=>[s.parents,s.children,s.pbd],regular:s=>[s.regular],local:s=>[s.phase.weeklyOn,s.phase.weekAnchor,s.phase.weeksPerCycle,s.phase.weekly],change:s=>[s.phase.begins,s.phase.move,s.phase.movePre,s.phase.ldDate,s.phase.ldEnd],hol:s=>[s.holidays,s.customs],vac:s=>[s.vacations&&s.vacations.allow,s.vacations&&s.vacations.notice,s.vacations&&s.vacations.maxLen],limits:s=>[s.cal]};
+// JSON with sorted keys, so the same settings compare equal whichever side built the object.
+function stable(x){ if(x===undefined)return 'null'; if(x===null||typeof x!=='object')return JSON.stringify(x); if(Array.isArray(x))return '['+x.map(stable).join(',')+']'; return '{'+Object.keys(x).sort().map(k=>x[k]===undefined?null:JSON.stringify(k)+':'+stable(x[k])).filter(Boolean).join(',')+'}'; }
 function diffSettings(a,b){
-  const J=x=>JSON.stringify(x===undefined?null:x);
+  const J=stable;
   const sections=Object.keys(SECTION_KEYS).filter(k=>J(SECTION_KEYS[k](a))!==J(SECTION_KEYS[k](b)));
   const items=(la,lb,list)=>{ const out=[]; const A=new Map((la||[]).map(x=>[x.id,x])), B=new Map((lb||[]).map(x=>[x.id,x])); for(const [id,x] of B){ if(!A.has(id))out.push({op:'add',list,item:x}); else if(J(A.get(id))!==J(x))out.push({op:'edit',list,item:x}); } for(const [id,x] of A){ if(!B.has(id))out.push({op:'remove',list,item:x}); } return out; };
   return {sections,items:[...items(a.changes,b.changes,'changes'),...items(a.vacations&&a.vacations.list,b.vacations&&b.vacations.list,'vacations')]};
@@ -280,5 +282,5 @@ function diffDays(a,b){ const out=[]; const keys=new Set([...Object.keys(a.days)
 // Exchanges in b that are not in a, and in a not in b.
 function diffExchanges(a,b){ const key=x=>`${x.t}|${x.from}|${x.to}`; const A=new Set(a.exchanges.map(key)), B=new Set(b.exchanges.map(key)); return {added:b.exchanges.filter(x=>!A.has(key(x))),removed:a.exchanges.filter(x=>!B.has(key(x)))}; }
 
-return {HOUR,DAYMS,utc,addD,ymd,hm,usd,usdStr,DOWN,dow,parseDate,parseHours,nth,last,monBefore,monOnOrBefore,easter,fixed,CAT,PLANSET,WEEKLY_PLAN,ROLE_TOKENS,roles,resolveWho,slotName,entryName,whoFor,parsePeriods,periodsFor,computeSchedule,configFrom,changePeriod,build,applyProposal,diffSettings,icsText,diffDays,diffExchanges};
+return {HOUR,DAYMS,utc,addD,ymd,hm,usd,usdStr,DOWN,dow,parseDate,parseHours,nth,last,monBefore,monOnOrBefore,easter,fixed,CAT,PLANSET,WEEKLY_PLAN,ROLE_TOKENS,roles,resolveWho,slotName,entryName,whoFor,parsePeriods,periodsFor,computeSchedule,configFrom,changePeriod,build,applyProposal,diffSettings,stable,icsText,diffDays,diffExchanges};
 });

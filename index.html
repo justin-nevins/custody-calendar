@@ -88,6 +88,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .place.on{display:block}
 .banner{margin-bottom:14px;padding:10px 12px;border-radius:var(--r);border:1px solid var(--line);background:var(--panel);font-size:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .banner.err{border-color:var(--warn);background:var(--warn-soft)}
+input[aria-invalid=true]{border-color:var(--warn);outline:2px solid var(--warn-soft)}
 
 .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:var(--r);padding:8px 14px;font-weight:700}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
@@ -232,16 +233,30 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .review dt{color:var(--ink-3)} .review dd{margin:0}
 @media (max-width:560px){.review dl{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:no-preference){.day{transition:transform .08s} .day:hover{transform:translateY(-1px)}}
+.acct{display:flex;flex-direction:column;gap:14px}
+.acct .card h2{margin:0}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.steps-v{display:flex;flex-direction:column;gap:12px}
+.steps-v .step{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start}
+.steps-v .n{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px}
+.code{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:3px;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:6px 12px}
+.badge{display:inline-block;min-width:18px;padding:0 6px;border-radius:999px;background:var(--warn);color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center;vertical-align:middle}
+.banner.draft{border-color:var(--change);background:var(--change-soft)}
+.banner .row{gap:6px}
+.day.prop{outline:2px dashed var(--change);outline-offset:-2px}
+.day .band.p{background:var(--change-soft);border-left-color:var(--change);border-left-style:dashed}
+.pill.ok{background:var(--ok-soft,#dff3e4);color:var(--ok,#1b7f3b);border-color:transparent}
 @media print{.top,.toolbar,.legend,#dayPanel,.banner{display:none!important} body{padding:0;background:#fff;color:#000} .place{display:none} #place-cal{display:block} .day{break-inside:avoid}}
 </style>
 </head>
 <body>
 <header class="top"><div class="wrap">
-  <div class="brand"><h1>Custody Calendar</h1><span class="tag">runs in your browser; nothing is sent anywhere</span></div>
+  <div class="brand"><h1>Custody Calendar</h1><span class="tag">works without an account; sign in to share it with the other parent</span></div>
   <nav class="tabs" role="tablist" aria-label="Places">
     <button role="tab" id="tab-cal" aria-selected="true" data-go="cal">Calendar</button>
     <button role="tab" id="tab-set" aria-selected="false" data-go="set">Settings</button>
     <button role="tab" id="tab-setup" aria-selected="false" data-go="setup">Setup</button>
+    <button role="tab" id="tab-acct" aria-selected="false" data-go="acct">Sign in</button>
   </nav>
 </div></header>
 
@@ -279,6 +294,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   </div>
 </section>
 
+<section class="place wrap" id="place-acct"></section>
+
 <section class="place wrap" id="place-setup">
   <div class="setup">
     <div class="steps" id="stepBar"></div>
@@ -287,6 +304,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 </section>
 
 <script src="engine.js"></script>
+<script src="account.js"></script>
 <script>
 // The schedule engine is in engine.js (shared with the server); it defines CCEngine.
 const {HOUR,DAYMS,utc,addD,ymd,hm,usd,usdStr,DOWN,dow,parseDate,parseHours,CAT,PLANSET,WEEKLY_PLAN,whoFor,parsePeriods,periodsFor,computeSchedule}=CCEngine;
@@ -317,6 +335,20 @@ const WHO_OPTS=()=>[['M',PN('M')],['F',PN('F')],['Modd',`${PN('M')} odd years / 
 // ----- state -----
 // Presets written in role words become a slot pattern: the pattern's first number is always Parent 1's days.
 function presetPattern(p){ if(!p.roleDays)return p.pattern; const mom=resolveWho('mother'); return mom==='M'?`${p.roleDays.mother},${p.roleDays.father}`:`${p.roleDays.father},${p.roleDays.mother}`; }
+// The parents trade parent numbers. Everything stored per slot moves with the person: names, colors, roles,
+// birthdays, every "goes to" choice written as a slot code, vacation allowances and the block pattern order.
+function swapSlots(S){
+  const sw=v=>v==='M'?'F':v==='F'?'M':v==='Modd'?'Meven':v==='Meven'?'Modd':v;
+  [S.parents,S.pbd,S.vacations.allow].forEach(o=>{ const m=o.M; o.M=o.F; o.F=m; });
+  for(const c of S.children)c.who=sw(c.who);
+  for(const h of Object.values(S.holidays))h.who=sw(h.who);
+  for(const c of S.customs)c.who=sw(c.who);
+  for(const v of S.vacations.list)v.who=sw(v.who);
+  for(const ch of S.changes)if(ch.who)ch.who=sw(ch.who);
+  for(const r of S.phase.weekly.rows)r.parent=sw(r.parent);
+  S.regular.first=sw(S.regular.first);
+  const pat=String(S.regular.pattern||'').split(/[,\s/-]+/).filter(Boolean); if(pat.length>1&&pat.length%2===0){ pat.push(pat.shift()); S.regular.pattern=pat.join(','); }
+}
 function planDefaults(){
   const d=new Date(); const startYm=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
   const holidays={}; for(const id of ['mothers','fathers','thanksus','prexmas','xmasper','nyper','febtime','maytime']){ const h=CAT.find(x=>x.id===id); holidays[id]={on:true,...(h.plan||{who:'motherOdd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[id]||{}),dates:'',applies:h.sameCity?'local':'both'}; }
@@ -374,7 +406,7 @@ function getPath(p){ return p.split('.').reduce((o,k)=>o==null?undefined:o[k],ST
 function setPath(p,v){ const ks=p.split('.'); let o=STATE; for(let i=0;i<ks.length-1;i++){ if(o[ks[i]]==null)o[ks[i]]={}; o=o[ks[i]]; } o[ks[ks.length-1]]=v; }
 function bindInput(t){
   const p=t.dataset.b; if(!p)return false; const ty=t.dataset.t||'str'; let v;
-  if(ty==='num')v=+t.value||0; else if(ty==='bool')v=!!t.checked; else if(ty==='eod'){ v=t.checked?'24:00':'10:00'; } else v=t.value;
+  if(ty==='num')v=+t.value||0; else if(ty==='bool')v=!!t.checked; else if(ty==='eod'){ v=t.checked?'24:00':'10:00'; } else if(ty==='date'){ const d=parseDate(t.value); v=d!==null?ymd(d):t.value.trim(); } else v=t.value;
   setPath(p,v); return true;
 }
 const UI={place:'cal',view:'month',cur:null,sel:null,section:'people',step:1,openHol:null,openVac:null,openChg:null,agendaAll:false,note:''};
@@ -402,10 +434,11 @@ function changeText(ch){ if(ch.kind==='give'){ if(!ch.s||!ch.e)return 'dates mis
 function renderCal(){
   const bn=$('calBanner'); let b='';
   if(ERR)b+=`<div class="banner err">${esc(ERR)} <button class="btn sm" data-go="set">Open Settings</button></div>`;
-  else if(RESULT&&RESULT.noMove)b+=`<div class="banner">No move date entered, so the calendar shows the local schedule only. <button class="btn sm" data-go="set" data-sec="change">Enter the move date</button></div>`;
+  else if(RESULT&&RESULT.noMove)b+=`<div class="banner">No move date entered, so the calendar shows the local schedule only. <button class="btn sm" data-go="set" data-sec="regular">Enter the move date</button></div>`;
   if(UI.note){b+=`<div class="banner">${esc(UI.note)}</div>`; UI.note='';}
+  b+=ACC.banner();
   bn.innerHTML=b;
-  $('legend').innerHTML=`<span><i class="sw M"></i>${esc(PN('M'))}</span><span><i class="sw F"></i>${esc(PN('F'))}</span><span><i class="sw x"></i>exchange day, split at the time shown</span><span><i class="sw h"></i>holiday or vacation</span><span><i class="sw c"></i>one-time change</span><span><i class="sw cap"></i>moved by the day limit</span><span><i class="sw bad"></i>over the limit</span>`;
+  $('legend').innerHTML=`<span><i class="sw M"></i>${esc(PN('M'))}</span><span><i class="sw F"></i>${esc(PN('F'))}</span><span><i class="sw x"></i>exchange day, split at the time shown</span><span><i class="sw h"></i>holiday or vacation</span><span><i class="sw c"></i>one-time change</span><span><i class="sw cap"></i>moved by the day limit</span><span><i class="sw bad"></i>over the limit</span>${ACC.propDays().size?'<span><i class="sw" style="outline:2px dashed var(--change);outline-offset:-2px"></i>proposed, not yet approved</span>':''}`;
   renderToday(); setView(UI.view); renderPanel();
 }
 function renderToday(){
@@ -444,6 +477,7 @@ function renderMonth(){
       if(info.chg)inner+=`<span class="band c" title="${esc(info.chg)}">${esc(info.chg)}</span>`;
       if(info.cap)inner+=`<span class="band" style="border-left-color:var(--ink-2);background:var(--panel)">moved by limit</span>`;
     }
+    if(ACC.propDays().has(key)){ cls+=' prop'; inner+=`<span class="band p" title="A proposal would change this day">proposed</span>`; }
     if(t===today)cls+=' today';
     html+=`<button type="button" class="${cls}"${style} data-day="${key}"${UI.sel===key?' aria-current="true"':''} aria-label="${fDL(t)}${info?`, with ${PN(info.first)}`:''}">${inner}</button>`;
   }
@@ -498,20 +532,19 @@ function setView(v){ UI.view=v; for(const k of ['month','agenda','year']){ $('vi
 
 // ===================== Settings place =====================
 const SECTIONS=[
- {id:'people',t:'Parents and children',s:()=>`${PN('M')}, ${PN('F')}${STATE.children.filter(c=>c.on&&c.md).map(c=>` · ${c.name||'child'} (${c.md})`).join('')}`},
+ {id:'people',t:'Parents and children',s:()=>`${PN(resolveWho('mother'))} (Mother, Parent ${resolveWho('mother')==='M'?1:2}), ${PN(resolveWho('father'))} (Father, Parent ${resolveWho('father')==='M'?1:2})${STATE.children.filter(c=>c.on&&c.md).map(c=>` · ${c.name||'child'} (${c.md})`).join('')}`},
  {id:'regular',t:'Long Distance Schedule',s:()=>regularText()},
  {id:'local',t:'Local Schedule',s:()=>localText()},
- {id:'change',t:'Which schedule is in force',s:()=>phaseText()},
  {id:'hol',t:'Holidays and birthdays',s:()=>`${Object.values(STATE.holidays).filter(h=>h.on).length} holidays selected`},
  {id:'vac',t:'Vacations',s:()=>`${STATE.vacations.allow.M} / ${STATE.vacations.allow.F} days a year · ${STATE.vacations.list.length} planned`},
  {id:'changes',t:'One-time changes',s:()=>`${STATE.changes.length} change${STATE.changes.length===1?'':'s'}`},
  {id:'limits',t:'Limits and range',s:()=>`${STATE.cal.limit} days · from ${usdStr(STATE.cal.start)} for ${STATE.cal.years} year${STATE.cal.years>1?'s':''}`},
  {id:'share',t:'Share and export',s:()=>'Link, .ics, .csv, print'},
 ];
-function renderSet(){ renderNav(); renderEdit(); const bn=$('setBanner'); bn.innerHTML=ERR?`<div class="banner err">${esc(ERR)}</div>`:''; }
+function renderSet(){ renderNav(); renderEdit(); const bn=$('setBanner'); bn.innerHTML=(ERR?`<div class="banner err">${esc(ERR)}</div>`:'')+ACC.banner(); }
 function renderNav(){ $('setNav').innerHTML=SECTIONS.map((x,i)=>`<button aria-selected="${x.id===UI.section}" data-sec="${x.id}"><span class="num">${i+1}</span><span><span class="t">${esc(x.t)}</span><br><span class="s">${esc(x.s())}</span></span></button>`).join(''); }
 function fld(label,inner){ return `<div class="field"><span class="lbl">${label}</span>${inner}</div>`; }
-function inp(path,opts={}){ const v=getPath(path); const t=opts.type||'text'; return `<input type="${t}" data-b="${path}"${opts.num?' data-t="num"':''} value="${esc(v==null?'':v)}"${opts.ph?` placeholder="${esc(opts.ph)}"`:''}${t==='time'?' step="3600"':''}${opts.min!=null?` min="${opts.min}"`:''}${opts.max!=null?` max="${opts.max}"`:''}>`; }
+function inp(path,opts={}){ const v=getPath(path); const t=opts.type||'text'; if(t==='date'){ const ok=!v||parseDate(v)!==null; return `<input type="text" inputmode="numeric" data-b="${path}" data-t="date" value="${esc(usdStr(v))}" placeholder="MM-DD-YYYY" autocomplete="off"${ok?'':' aria-invalid="true" title="Enter the date as MM-DD-YYYY"'}>`; } return `<input type="${t}" data-b="${path}"${opts.num?' data-t="num"':''} value="${esc(v==null?'':v)}"${opts.ph?` placeholder="${esc(opts.ph)}"`:''}${t==='time'?' step="3600"':''}${opts.min!=null?` min="${opts.min}"`:''}${opts.max!=null?` max="${opts.max}"`:''}>`; }
 function sel(path,options,opts={}){ let v=getPath(path); if(CCEngine.ROLE_TOKENS.includes(v))v=resolveWho(v); return `<select data-b="${path}"${opts.num?' data-t="num"':''}>${options.map(([val,l])=>`<option value="${val}"${String(val)===String(v)?' selected':''}>${esc(l)}</option>`).join('')}</select>`; }
 function chk(path,label){ return `<label class="field check"><input type="checkbox" data-b="${path}" data-t="bool"${getPath(path)?' checked':''}> <span>${label}</span></label>`; }
 function endInp(path){ const v=getPath(path); const eod=v==='24:00'; return `<span class="row" style="gap:6px"><input type="time" data-b="${path}" value="${eod?'00:00':esc(v)}" step="3600"${eod?' disabled':''}><label class="small row" style="gap:4px"><input type="checkbox" data-b="${path}" data-t="eod"${eod?' checked':''}> end of day</label></span>`; }
@@ -522,34 +555,33 @@ function colorPicker(code){ return `<div class="swatches" role="group" aria-labe
 function secHtml(id){
   const S=STATE;
   switch(id){
-  case 'people': { const same=S.parents.M.role===S.parents.F.role&&S.parents.M.role!=='parent'; return `<div class="head"><div><h2>Parents and children</h2><p class="muted">Names and colors are used everywhere. Who is the mother and who is the father decides the defaults: Mother's Day, Father's Day, the parenting plan periods and who the first block goes to. Either parent can be Parent 1.</p></div></div>
-    <div class="form four">${fld('Parent 1',inp('parents.M.name',{ph:'Name'}))}${fld('Parent 1 is',sel('parents.M.role',ROLES))}${fld('Color',colorPicker('M'))}<span></span>${fld('Parent 2',inp('parents.F.name',{ph:'Name'}))}${fld('Parent 2 is',sel('parents.F.role',ROLES))}${fld('Color',colorPicker('F'))}<span></span></div>
-    ${same?`<div class="notice warn">Both parents are marked as ${esc(S.parents.M.role)}. Mother's Day, Father's Day and the plan defaults then follow Parent 1. Set one of them to the other role.</div>`:''}
+  case 'people': { const mom=resolveWho('mother'), dad=mom==='M'?'F':'M'; const num=k=>k==='M'?1:2;
+    const block=(role,k)=>`<div class="panel"><div class="row" style="justify-content:space-between"><h3>${role}</h3><span class="pill">Parent ${num(k)}</span></div><div class="form tight">${fld(role+"'s name",inp(`parents.${k}.name`,{ph:role}))}${fld('Color',colorPicker(k))}${fld('Parent number',`<select data-act="parentNumber" data-arg="${k}"><option value="1"${num(k)===1?' selected':''}>1</option><option value="2"${num(k)===2?' selected':''}>2</option></select>`)}</div></div>`;
+    return `<div class="head"><div><h2>Parents and children</h2><p class="muted">Each parent is known by three things: who they are (mother or father), their name, and their parent number. Mother's Day, Father's Day, the parenting plan periods and "first block to the father" follow who they are. The parent number is the order in patterns such as 21, 11 (Parent 1's days first) and in lists. Names and colors are used everywhere. Birthdays become calendar entries.</p></div></div>
+    <div class="grid2">${block('Mother',mom)}${block('Father',dad)}</div>
     <div class="list">${S.children.map((c,i)=>`<div class="item"><input type="checkbox" data-b="children.${i}.on" data-t="bool"${c.on?' checked':''} aria-label="Use this birthday"><div><div class="form tight">${fld('Child',inp(`children.${i}.name`,{ph:'Name'}))}${fld('Birthday (MM-DD)',inp(`children.${i}.md`,{ph:'MM-DD'}))}</div><div class="res" style="margin-top:6px">${esc(childText(c))}</div><details class="help" style="margin-top:6px"><summary>Birthday period settings</summary>${periodFields(`children.${i}`)}</details></div><button class="btn sm danger" data-act="rmChild" data-arg="${i}">Remove</button></div>`).join('')}
-    ${['M','F'].map(k=>`<div class="item"><input type="checkbox" data-b="pbd.${k}.on" data-t="bool"${S.pbd[k].on?' checked':''} aria-label="Use this birthday"><div><div class="form tight">${fld(`${esc(PN(k))}'s birthday (MM-DD)`,inp(`pbd.${k}.md`,{ph:'MM-DD'}))}</div>${S.pbd[k].on&&S.pbd[k].md?`<div class="res" style="margin-top:6px">${esc(childText({...S.pbd[k],who:k}))}</div>`:''}<details class="help" style="margin-top:6px"><summary>Birthday period settings</summary><div class="form tight">${fld('Days before',inp(`pbd.${k}.before`,{type:'number',num:true,min:0,max:60}))}${fld('Days after',inp(`pbd.${k}.after`,{type:'number',num:true,min:0,max:60}))}${fld('Starts at',inp(`pbd.${k}.start`,{type:'time'}))}${fld('Ends at',endInp(`pbd.${k}.end`))}${fld('Applies under',sel(`pbd.${k}.applies`,APPLIES))}</div></details></div><span></span></div>`).join('')}</div>
+    ${[mom,dad].map(k=>`<div class="item"><input type="checkbox" data-b="pbd.${k}.on" data-t="bool"${S.pbd[k].on?' checked':''} aria-label="Use this birthday"><div><div class="form tight">${fld(`${esc(PN(k))}'s birthday (MM-DD)`,inp(`pbd.${k}.md`,{ph:'MM-DD'}))}</div>${S.pbd[k].on&&S.pbd[k].md?`<div class="res" style="margin-top:6px">${esc(childText({...S.pbd[k],who:k}))}</div>`:''}<details class="help" style="margin-top:6px"><summary>Birthday period settings</summary><div class="form tight">${fld('Days before',inp(`pbd.${k}.before`,{type:'number',num:true,min:0,max:60}))}${fld('Days after',inp(`pbd.${k}.after`,{type:'number',num:true,min:0,max:60}))}${fld('Starts at',inp(`pbd.${k}.start`,{type:'time'}))}${fld('Ends at',endInp(`pbd.${k}.end`))}${fld('Applies under',sel(`pbd.${k}.applies`,APPLIES))}</div></details></div><span></span></div>`).join('')}</div>
     <button class="btn sm" style="align-self:flex-start" data-act="addChild">+ Add a child</button>`; }
-  case 'regular': return `<div class="head"><div><h2>Long Distance Schedule</h2><p class="muted">The block pattern used while the parents live apart. When it is in force is set under "Which schedule is in force".</p></div></div>
+  case 'regular': return `<div class="head"><div><h2>Long Distance Schedule</h2><p class="muted">The block pattern used while the parents live apart, and when it takes over from the local schedule. Holidays, birthdays, vacations and one-time changes each say which schedule they apply under; the default is both.</p></div></div>
     ${chk('regular.on','Use the long distance schedule')}
     <div class="tpl">${Object.entries(PRESETS).map(([k,p])=>`<button type="button" aria-pressed="${S.regular.preset===k}" data-act="preset" data-arg="${k}"><span class="bar">${[...p.bar].map(c=>`<i class="${c}"></i>`).join('')}</span><span class="nm">${esc(p.nm)}</span><span class="ds">${esc(p.ds)}</span></button>`).join('')}</div>
-    <div class="form">${fld(`Days per block (${esc(PN('M'))}, ${esc(PN('F'))}, ${esc(PN('M'))}, ...)`,inp('regular.pattern',{ph:'21, 11'}))}${fld('First block goes to',sel('regular.first',[['M',PN('M')],['F',PN('F')]]))}${fld('Exchange time',inp('regular.xtime',{type:'time'}))}${fld('Usual exchange place (optional)',inp('regular.place',{ph:'School, airport, ...'}))}</div>
-    <div class="notice">${esc(regularText())}.</div>
+    ${(()=>{ const pat=String(S.regular.pattern||'').split(/[,\s/-]+/).filter(Boolean); while(pat.length<2)pat.push(''); return `<div class="form">${pat.map((n,i)=>fld(`Days with ${esc(PN(i%2===0?'M':'F'))}${pat.length>2?` (block ${i+1})`:''}`,`<span class="row" style="gap:6px"><input type="number" min="1" max="60" data-act="patBlock" data-arg="${i}" value="${esc(n)}" style="flex:1">${pat.length>2?`<button class="btn sm danger" data-act="rmBlock" data-arg="${i}" aria-label="Remove block ${i+1}">×</button>`:''}</span>`)).join('')}${fld('First block goes to',sel('regular.first',[['M',PN('M')],['F',PN('F')]]))}${fld('Exchange time',inp('regular.xtime',{type:'time'}))}${fld('Usual exchange place (optional)',inp('regular.place',{ph:'School, airport, ...'}))}</div>
+    <div class="row"><button class="btn sm" data-act="addBlock">+ Add a block (for patterns like 2-2-3)</button><span class="small muted">Blocks repeat in this order: ${pat.map((n,i)=>`${n||'?'} with ${esc(PN(i%2===0?'M':'F'))}`).join(', ')}, then again.</span></div>`; })()}
+    <h3>When it is in force</h3>
+    <div class="form">${fld('The long distance schedule begins',sel('phase.begins',[['move','A number of days before a move date'],['date','On a date'],['start','At the calendar start (local schedule not used before it)']]))}
+    ${S.phase.begins==='move'?fld('Move date',inp('phase.move',{type:'date'}))+fld('Days before the move it begins',inp('phase.movePre',{type:'number',num:true,min:0,max:60})):''}
+    ${S.phase.begins==='date'?fld('Date it begins',inp('phase.ldDate',{type:'date'})):''}</div>
+    <div class="notice">${esc(regularText())}. ${esc(phaseText())}${RESULT&&RESULT.ldStart!==null?`. Long distance begins ${fDT(RESULT.ldStart)}`:''}${RESULT&&RESULT.ldEnd!==null?`; local resumes ${fDT(RESULT.ldEnd)} (set under Local Schedule)`:''}.</div>
     ${stripHtml()}
     <details class="help"><summary>How the first day is counted</summary><p>The first block starts at the exchange time on the day the pattern begins, with the parent in "First block goes to". Blocks are counted in whole days from that time.</p></details>`;
-  case 'local': { const p=S.phase; const wpc=+p.weeksPerCycle||2; const WK=[[1,'Week A'],[2,'Week B'],[3,'Week C'],[4,'Week D']].slice(0,wpc); return `<div class="head"><div><h2>Local Schedule</h2><p class="muted">The weekly schedule used while the parents live in the same place. Each row gives one parent a period; the other parent has all the time not listed. When it is in force is set under "Which schedule is in force".</p></div></div>
+  case 'local': { const p=S.phase; const wpc=+p.weeksPerCycle||2; const WK=[[1,'Week A'],[2,'Week B'],[3,'Week C'],[4,'Week D']].slice(0,wpc); return `<div class="head"><div><h2>Local Schedule</h2><p class="muted">The weekly schedule used while the parents live in the same place. Each row gives one parent a period; the other parent has all the time not listed. It is in force until the long distance schedule begins (set under Long Distance Schedule), and again from the date below if the parents live in the same place again.</p></div></div>
     ${chk('phase.weeklyOn','Use the local schedule')}
     <div class="form">${fld('Weeks in the cycle',sel('phase.weeksPerCycle',[[1,'1 (every week the same)'],[2,'2 (Week A, Week B)'],[3,'3'],[4,'4']],{num:true}))}${fld('Week A starts on (a Monday, or the Monday before this date)',inp('phase.weekAnchor',{type:'date'}))}${fld('Usual exchange place (optional)',inp('phase.weekly.place',{ph:'School, home, ...'}))}</div>
     <div class="wrows">${p.weekly.rows.map((r,i)=>`<div class="wrow">${fld('Week',sel(`phase.weekly.rows.${i}.week`,WK,{num:true}))}${fld('Parent',sel(`phase.weekly.rows.${i}.parent`,[['F',PN('F')],['M',PN('M')]]))}${fld('From',sel(`phase.weekly.rows.${i}.sd`,DOWN.map((d,n)=>[n,d]),{num:true}))}${fld('at',inp(`phase.weekly.rows.${i}.st`,{type:'time'}))}${fld('To',sel(`phase.weekly.rows.${i}.ed`,DOWN.map((d,n)=>[n,d]),{num:true}))}${fld('at',inp(`phase.weekly.rows.${i}.et`,{type:'time'}))}<button class="btn sm danger" data-act="rmRow" data-arg="${i}">Remove</button></div>`).join('')}</div>
     <button class="btn sm" style="align-self:flex-start" data-act="addRow">+ Add a period</button>
-    <div class="notice">${esc(localText())}. Weeks are counted from the Week A date and keep counting through a long distance phase, so the same week letter returns after a return to local.</div>
-    ${stripHtml()}`; }
-  case 'change': { const p=S.phase; return `<div class="head"><div><h2>Which schedule is in force</h2><p class="muted">The calendar follows one schedule at a time. Holidays, birthdays, vacations and one-time changes each say which schedule they apply under; the default is both.</p></div></div>
-    <div class="form">${fld('The long distance schedule begins',sel('phase.begins',[['move','A number of days before a move date'],['date','On a date'],['start','At the calendar start (local schedule not used before it)']]))}
-    ${p.begins==='move'?fld('Move date',inp('phase.move',{type:'date'}))+fld('Days before the move it begins',inp('phase.movePre',{type:'number',num:true,min:0,max:60})):''}
-    ${p.begins==='date'?fld('Date it begins',inp('phase.ldDate',{type:'date'})):''}
-    ${fld('Local schedule resumes on (optional, after a return)',inp('phase.ldEnd',{type:'date'}))}</div>
-    <div class="notice">${esc(phaseText())}${RESULT&&RESULT.ldStart!==null?`. Long distance begins ${fDT(RESULT.ldStart)}`:''}${RESULT&&RESULT.ldEnd!==null?`; local resumes ${fDT(RESULT.ldEnd)}`:''}.</div>
-    <div class="row"><span class="small muted">Edit the schedules themselves:</span><button class="btn sm" data-sec="regular">Long Distance Schedule</button><button class="btn sm" data-sec="local">Local Schedule</button></div>
-    <p class="help">Turning a schedule off under its own section removes it from the calendar: long distance off means local only; local off means long distance from its start date, with nothing before it.</p>
+    <h3>When it is in force</h3>
+    <div class="form">${fld('Local schedule resumes on (optional, after a return)',inp('phase.ldEnd',{type:'date'}))}</div>
+    <div class="notice">${esc(localText())}. ${esc(phaseText())}. Weeks are counted from the Week A date and keep counting through a long distance phase, so the same week letter returns after a return to local.</div>
     ${stripHtml()}`; }
   case 'hol': { const groups=[['Parenting plan periods',CAT.filter(h=>h.region==='Plan')],['United States and Canada',CAT.filter(h=>h.region==='Both')],['United States',CAT.filter(h=>h.region==='US')],['Canada',CAT.filter(h=>h.region==='Canada')]];
     return `<div class="head"><div><h2>Holidays and birthdays</h2><p class="muted">Tick what your plan covers. Each row shows the dates it produces for this year and next, so the setting can be checked against the plan without reading the rule.</p></div></div>
@@ -573,7 +605,7 @@ function secHtml(id){
     ${r?`<div class="tblbox"><table class="tbl"><thead><tr><th>Year</th><th class="num">${esc(PN('M'))} days</th><th class="num">${esc(PN('F'))} days</th><th class="num">Exchanges</th><th class="num">Longest with ${esc(PN('M'))}</th><th class="num">Longest with ${esc(PN('F'))}</th><th>Over the limit</th><th class="num">Days moved</th></tr></thead><tbody>${r.summary.map(s=>`<tr><td>${s.y}</td><td class="num">${fmt1(s.mDays)}</td><td class="num">${fmt1(s.fDays)}</td><td class="num">${s.ex}</td><td class="num">${fmt1(s.lm)}</td><td class="num">${fmt1(s.lf)}</td><td class="${s.over.length?'warnt':'okt'}">${s.over.length?s.over.length+' stretch'+(s.over.length>1?'es':''):'none'}</td><td class="num">${fmt1(s.moved)}</td></tr>`).join('')}</tbody></table></div>
     <p class="small muted">Days are counted in hours; an exchange day is split at the exchange time, so totals can end in a decimal.</p>
     ${r.over.length?`<div class="notice warn"><b>${r.over.length} stretch${r.over.length>1?'es':''} over ${S.cal.limit} days:</b><br>${r.over.map(sg=>`${fDT(sg.s)} to ${fDT(sg.e)}: ${fmt1(sg.h/24)} days with ${esc(PN(sg.p))}`).join('<br>')}</div>`:`<div class="notice">Nothing goes over ${S.cal.limit} days in the range.</div>`}`:''}`; }
-  case 'share': return `<div class="head"><div><h2>Share and export</h2><p class="muted">Settings stay in this browser. A link carries them to any other phone or computer. Nothing is stored on a server.</p></div></div>
+  case 'share': return `<div class="head"><div><h2>Share and export</h2><p class="muted">${ACC.inFamily()?`This calendar is shared with ${esc(ACC.otherName())} through your account; the dashboard has the calendar address for your phone. The link below carries a copy only.`:'Settings stay in this browser. A link carries them to any other phone or computer. To share one live calendar with the other parent, sign in (Sign in tab).'}</p></div></div>
     <div class="list">
      <div class="item"><span class="pill">link</span><div><b>Share link</b><div class="res">Opens this exact calendar, with every setting, on the other parent's device. Send it again after a change.</div><input class="mono small" style="width:100%;margin-top:6px;font:inherit;font-family:var(--mono);font-size:12px;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink)" readonly value="${esc(shareLink())}" id="shareUrl"></div><button class="btn sm primary" data-act="copyLink">Copy link</button></div>
      <div class="item"><span class="pill">.ics</span><div><b>Calendar file</b><div class="res">Apple Calendar, Outlook, Google Calendar import. One event per block and one per exchange.</div></div><button class="btn sm" data-act="ics">Download</button></div>
@@ -584,24 +616,24 @@ function secHtml(id){
     <p class="small muted" id="saveMsg"></p>
     <h3>Start over</h3>
     <div class="row"><button class="btn sm" data-act="loadPlan">Load the parenting plan defaults</button><button class="btn sm" data-act="runSetup">Run the setup again</button></div>
-    <div class="notice">Runs entirely in the browser. Nothing you enter is sent anywhere. A planning aid, not legal advice; the parenting plan controls.</div>`;
+    <div class="notice">${ACC.inFamily()?'Shared through your account; the record keeps every change.':'Without an account, nothing you enter is sent anywhere.'} A planning aid, not legal advice; the parenting plan controls.</div>`;
   }
   return '';
 }
-function renderEdit(){ $('setEdit').innerHTML=secHtml(UI.section)+`<div class="foot"><span class="small muted">Changes apply at once and are saved in this browser.</span><button class="btn quiet" data-go="cal">&#8592; Back to calendar</button></div>`; }
+function renderEdit(){ $('setEdit').innerHTML=secHtml(UI.section)+`<div class="foot"><span class="small muted">${ACC.inFamily()?(ACC.alone()?'Changes are a draft until you save them to the shared calendar (banner above).':`Changes are a draft until you send them to ${esc(ACC.otherName())} for approval (banner above).`):'Changes apply at once and are saved in this browser.'}</span><button class="btn quiet" data-go="cal">&#8592; Back to calendar</button></div>`; }
 
 // ===================== Setup place =====================
-const STEPS=[['Who','people'],['Long distance','regular'],['Local','local'],['In force','change'],['Holidays','hol'],['Vacations','vac'],['Limits','limits'],['Finish','review']];
+const STEPS=[['Who','people'],['Long distance','regular'],['Local','local'],['Holidays','hol'],['Vacations','vac'],['Limits','limits'],['Finish','review']];
 function reviewHtml(){ const S=STATE; const hol=Object.entries(S.holidays).filter(([,h])=>h.on).map(([id])=>hName(CAT.find(h=>h.id===id))); return `<div class="head"><div><h2>${STEPS.length}. Check and finish</h2><p class="muted">Everything here can be changed later from Settings. Tap a line to go back to it.</p></div></div>
   <div class="review"><dl>
-   <dt><a href="#" data-step="1">Parents</a></dt><dd><span class="who M">${esc(PN('M'))}</span> &nbsp; <span class="who F">${esc(PN('F'))}</span></dd>
+   <dt><a href="#" data-step="1">Parents</a></dt><dd>${[resolveWho('mother'),resolveWho('mother')==='M'?'F':'M'].map(k=>`<span class="who ${k}">${esc(PN(k))}</span> (${S.parents[k].role==='mother'?'Mother':'Father'}, Parent ${k==='M'?1:2})`).join(' &nbsp; ')}</dd>
    <dt><a href="#" data-step="1">Children</a></dt><dd>${S.children.filter(c=>c.on).map(c=>`${esc(c.name||'child')}, birthday ${esc(c.md||'not set')}`).join('; ')||'none'}</dd>
    <dt><a href="#" data-step="2">Long distance</a></dt><dd>${esc(regularText())}</dd>
    <dt><a href="#" data-step="3">Local</a></dt><dd>${esc(localText())}</dd>
-   <dt><a href="#" data-step="4">In force</a></dt><dd>${esc(phaseText())}</dd>
-   <dt><a href="#" data-step="5">Holidays</a></dt><dd>${hol.length} selected: ${esc(hol.join(', '))}</dd>
-   <dt><a href="#" data-step="6">Vacations</a></dt><dd>${S.vacations.allow.M} and ${S.vacations.allow.F} days a year, ${S.vacations.notice} days notice, ${S.vacations.list.length} planned</dd>
-   <dt><a href="#" data-step="7">Limit</a></dt><dd>${S.cal.limit} days; ${S.cal.mode==='cap'?'extra days go to the other parent':'only marked'}; calendar from ${esc(usdStr(S.cal.start))} for ${S.cal.years} years</dd>
+   <dt><a href="#" data-step="2">In force</a></dt><dd>${esc(phaseText())}</dd>
+   <dt><a href="#" data-step="4">Holidays</a></dt><dd>${hol.length} selected: ${esc(hol.join(', '))}</dd>
+   <dt><a href="#" data-step="5">Vacations</a></dt><dd>${S.vacations.allow.M} and ${S.vacations.allow.F} days a year, ${S.vacations.notice} days notice, ${S.vacations.list.length} planned</dd>
+   <dt><a href="#" data-step="6">Limit</a></dt><dd>${S.cal.limit} days; ${S.cal.mode==='cap'?'extra days go to the other parent':'only marked'}; calendar from ${esc(usdStr(S.cal.start))} for ${S.cal.years} years</dd>
   </dl></div>
   ${ERR?`<div class="notice warn">${esc(ERR)}</div>`:stripHtml()}
   <div class="notice">Your settings stay in this browser. Under Settings, Share and export, a link opens the same calendar on any other phone.</div>`; }
@@ -612,13 +644,17 @@ function renderSetup(){
 }
 
 // ===================== places and events =====================
-function go(p,sec){ UI.place=p; for(const k of ['cal','set','setup']){ $('place-'+k).classList.toggle('on',k===p); $('tab-'+k).setAttribute('aria-selected',k===p); } if(sec)UI.section=sec; render(); window.scrollTo({top:0}); }
-function render(){ if(UI.place==='cal')renderCal(); else if(UI.place==='set')renderSet(); else renderSetup(); }
+function go(p,sec){ UI.place=p; for(const k of ['cal','set','setup','acct']){ $('place-'+k).classList.toggle('on',k===p); $('tab-'+k).setAttribute('aria-selected',k===p); } if(sec)UI.section=sec; render(); window.scrollTo({top:0}); }
+function render(){ if(UI.place==='cal')renderCal(); else if(UI.place==='set')renderSet(); else if(UI.place==='acct')ACC.render(); else renderSetup(); }
 function rerender(){ rebuild(); render(); }
 
+function patArr(){ return String(STATE.regular.pattern||'').split(/[,\s/-]+/).filter(Boolean); }
 document.addEventListener('change',e=>{
-  const t=e.target; if(!bindInput(t))return;
-  if(/^parents\.[MF]\.role$/.test(t.dataset.b)){ const p=PRESETS[STATE.regular.preset]; if(p&&p.roleDays)STATE.regular.pattern=presetPattern(p); }
+  const t=e.target;
+  if(t.dataset.act==='patBlock'){ const pat=patArr(); while(pat.length<=+t.dataset.arg)pat.push(''); pat[+t.dataset.arg]=String(Math.max(0,+t.value||0)||''); STATE.regular.pattern=pat.join(','); STATE.regular.preset='custom'; rerender(); return; }
+  if(t.dataset.act==='parentNumber'){ const k=t.dataset.arg; const want=+t.value; const have=k==='M'?1:2; if(want!==have){ swapSlots(STATE); } rerender(); return; }
+  if(!bindInput(t))return;
+
   // a holiday edited while unticked turns on
   const m=/^holidays\.([^.]+)\./.exec(t.dataset.b); if(m&&STATE.holidays[m[1]])STATE.holidays[m[1]].on=true;
   rerender();
@@ -626,6 +662,7 @@ document.addEventListener('change',e=>{
 document.addEventListener('click',async e=>{
   const a=e.target.closest('a[data-step]'); if(a){ e.preventDefault(); UI.step=+a.dataset.step; renderSetup(); window.scrollTo({top:0}); return; }
   const b=e.target.closest('button,input[type=checkbox][data-act]'); if(!b)return;
+  if(b.dataset.acct){ ACC.action(b.dataset.acct,b.dataset.arg,b); return; }
   if(b.dataset.go){ go(b.dataset.go,b.dataset.sec); return; }
   if(b.dataset.sec&&!b.dataset.act){ UI.section=b.dataset.sec; if(UI.place!=='set')go('set'); else {renderSet();window.scrollTo({top:0});} return; }
   if(b.dataset.view){ setView(b.dataset.view); return; }
@@ -646,6 +683,8 @@ document.addEventListener('click',async e=>{
     case 'addChild': S.children.push({id:uid(),name:'',md:'',who:'motherOdd',before:0,after:1,start:'16:00',end:'10:00',on:true}); rerender(); return;
     case 'rmChild': S.children.splice(+arg,1); rerender(); return;
     case 'preset': { const p=PRESETS[arg]; S.regular.preset=arg; S.regular.on=true; const pat=presetPattern(p); if(pat){S.regular.pattern=pat;S.regular.first=p.first;S.regular.xtime=p.xtime;} rerender(); return; }
+    case 'addBlock': { const pat=patArr(); pat.push('2'); if(pat.length%2===1)pat.push('2'); S.regular.pattern=pat.join(','); S.regular.preset='custom'; rerender(); return; }
+    case 'rmBlock': { const pat=patArr(); pat.splice(+arg,1); if(pat.length%2===1&&pat.length>2)pat.pop(); S.regular.pattern=pat.join(','); S.regular.preset='custom'; rerender(); return; }
     case 'addRow': S.phase.weekly.rows.push({week:1,parent:'father',sd:5,st:'17:00',ed:0,et:'17:00'}); rerender(); return;
     case 'rmRow': S.phase.weekly.rows.splice(+arg,1); rerender(); return;
     case 'holOn': { const h=CAT.find(x=>x.id===arg); if(!S.holidays[arg])S.holidays[arg]={on:false,...(h.plan||{who:'motherOdd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[arg]||{}),dates:'',applies:h.sameCity?'local':'both'}; S.holidays[arg].on=b.checked; rerender(); return; }
@@ -690,6 +729,7 @@ loadState();
 { const d=new Date(); UI.cur={y:d.getFullYear(),m:d.getMonth()+1}; UI.sel=ymd(todayT()); }
 rebuild();
 if(!STATE.setupDone){ UI.step=1; go('setup'); } else go('cal');
+ACC.init();
 </script>
 </body>
 </html>
