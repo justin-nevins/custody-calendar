@@ -176,15 +176,15 @@ function computeSchedule(c){
   // Exchange time rules (c.xrules, each {applies, days, dates, time}): a regular exchange that matches a rule moves to
   // the rule's time on the same day. The parent whose time was ending keeps the hours up to a later time; the parent
   // whose time is starting takes the hours back from an earlier time. Holiday, make-up and limit boundaries are not moved.
-  const xrules=(c.xrules||[]).map(r=>({...r,h:parseHours(r.time),ranges:parsePeriods(r.dates||'')})).filter(r=>r.time);
+  const xrules=(c.xrules||[]).map(r=>({...r,h:parseHours(r.time),ranges:parsePeriods(r.dates||'')})).filter(r=>r.time); const movedByRule=new Set();
   if(xrules.length){
     const bounds=[]; for(let i=1;i<N;i++){ if(par[i]!==par[i-1]&&src[i]===0&&src[i-1]===0)bounds.push(i); }
     for(const i of bounds){
       const t=t0+i*HOUR; const loc=inWeekly(t);
       const rule=xrules.find(r=>ruleMatches(r,t,loc)); if(!rule)continue;
       const h=new Date(t).getUTCHours(); const j=i-h+rule.h; if(j===i||j<0||j>=N)continue;
-      if(j>i){ const p=par[i-1]; for(let k=i;k<j;k++){ if(src[k]!==0)break; par[k]=p; } }
-      else { const p=par[i]; for(let k=i-1;k>=j;k--){ if(src[k]!==0)break; par[k]=p; } }
+      if(j>i){ const p=par[i-1]; let k=i; for(;k<j;k++){ if(src[k]!==0)break; par[k]=p; } movedByRule.add(k); }
+      else { const p=par[i]; let k=i-1; for(;k>=j;k--){ if(src[k]!==0)break; par[k]=p; } movedByRule.add(k+1); }
     }
   }
   const limitH=(+c.limit||21)*24; let movedH=0;
@@ -210,7 +210,7 @@ function computeSchedule(c){
     const pi=src[i]>0?periods[src[i]-1]:null, pp=src[i-1]>0?periods[src[i-1]-1]:null;
     let why, kind='regular';
     if(pp&&pp.pri===0){why=pp.name+' ends';kind='change';} else if(pi&&pi.pri===0){why=pi.name+' begins';kind='change';}
-    else if(pi){why=pi.name+' begins';kind='period';} else if(src[i]===-1){why='day limit rule';kind='limit';} else if(src[i]===-2){why='make-up days begin';kind='makeup';} else if(pp){why=pp.name+' ends';kind='period';} else if(src[i-1]===-1){why='day limit rule';kind='limit';} else if(src[i-1]===-2){why='make-up days end';kind='makeup';} else why=(inWeekly(sg.s)?'local schedule':'long distance schedule');
+    else if(pi){why=pi.name+' begins';kind='period';} else if(src[i]===-1){why='day limit rule';kind='limit';} else if(src[i]===-2){why='make-up days begin';kind='makeup';} else if(pp){why=pp.name+' ends';kind='period';} else if(src[i-1]===-1){why='day limit rule';kind='limit';} else if(src[i-1]===-2){why='make-up days end';kind='makeup';} else why=(inWeekly(sg.s)?'local schedule':'long distance schedule')+(movedByRule.has(i)?', time set by an exchange rule':'');
     exchanges.push({t:sg.s,from:prev.p,to:sg.p,why,kind}); }
   const summary=[];
   for(let y=y0;y<y0+years;y++){
@@ -372,7 +372,7 @@ function applyProposal(settings,kind,payload){
   return s;
 }
 // What differs between two settings objects, by section, plus the items added, edited or removed.
-const SECTION_KEYS={people:s=>[s.parents,s.children,s.pbd],regular:s=>[s.regular],local:s=>[s.phase.weeklyOn,s.phase.weekAnchor,s.phase.weeksPerCycle,s.phase.weekly],change:s=>[s.phase.begins,s.phase.move,s.phase.movePre,s.phase.ldDate,s.phase.ldEnd],hol:s=>[s.holidays,s.customs],vac:s=>[s.vacations&&s.vacations.allow,s.vacations&&s.vacations.notice,s.vacations&&s.vacations.maxLen],limits:s=>[s.cal]};
+const SECTION_KEYS={people:s=>[s.parents,s.children,s.pbd],regular:s=>[s.regular],local:s=>[s.phase.weeklyOn,s.phase.weekAnchor,s.phase.weeksPerCycle,s.phase.weekly],change:s=>[s.phase.begins,s.phase.move,s.phase.movePre,s.phase.ldDate,s.phase.ldEnd],hol:s=>[s.holidays,s.customs],vac:s=>[s.vacations&&s.vacations.allow,s.vacations&&s.vacations.notice,s.vacations&&s.vacations.maxLen],limits:s=>[s.cal],xch:s=>[s.xrules||[]]};
 // JSON with sorted keys, so the same settings compare equal whichever side built the object.
 function stable(x){ if(x===undefined)return 'null'; if(x===null||typeof x!=='object')return JSON.stringify(x); if(Array.isArray(x))return '['+x.map(stable).join(',')+']'; return '{'+Object.keys(x).sort().map(k=>x[k]===undefined?null:JSON.stringify(k)+':'+stable(x[k])).filter(Boolean).join(',')+'}'; }
 function diffSettings(a,b){
