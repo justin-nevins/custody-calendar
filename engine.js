@@ -131,7 +131,6 @@ function computeSchedule(c){
   };
   const le=parseDate(c.ldEnd); const ldEnd=(le!==null&&begins!=='never'&&c.weeklyOn!==false)?le+xh*HOUR:null;
   const inWeekly=(t)=> begins==='never' || (weeklyPhase && t<ldStart) || (ldEnd!==null && t>=ldEnd);
-  for(let i=0;i<N;i++){ const t=t0+i*HOUR; par[i]= inWeekly(t)?weeklyParent(t):blockParent(t); }
   const periods=[];
   for(let y=y0-1;y<=y0+years;y++){
     for(const h of CAT){ const cfg=c.holidays&&c.holidays[h.id]; if(!cfg||!cfg.on)continue; const entry=(c.names&&c.names[h.id])?{...h,name:c.names[h.id]}:h; for(const p of periodsFor(entry,cfg,y,h.rule(y)))periods.push(p); }
@@ -140,10 +139,30 @@ function computeSchedule(c){
   for(const cu of (c.customs||[])){ for(const [ps,pe] of parsePeriods(cu.dates)){ const y=new Date(ps).getUTCFullYear(); periods.push({s:ps,e:pe,who:whoFor(cu.who||'M',y),name:cu.name||'Custom period',pri:(cu.pri==null||cu.pri==='')?3:+cu.pri,applies:cu.applies||'both',kind:cu.kind||'custom'}); } }
   periods.sort((a,b)=>b.pri-a.pri);
   periods.forEach((p,k)=>{p.idx=k+1;});
+  // Period overlay: which hours a holiday, birthday, vacation, custom period or one-time change takes, and for whom.
+  const pp=new Uint8Array(N), ps=new Int16Array(N);
   for(const p of periods){
     const i0=Math.max(0,Math.ceil((p.s-t0)/HOUR)), i1=Math.min(N,Math.ceil((p.e-t0)/HOUR));
-    for(let i=i0;i<i1;i++){ const loc=inWeekly(t0+i*HOUR); if(p.applies==='local'&&!loc)continue; if(p.applies==='ld'&&loc)continue; par[i]=P[p.who]; src[i]=p.idx; }
+    for(let i=i0;i<i1;i++){ const loc=inWeekly(t0+i*HOUR); if(p.applies==='local'&&!loc)continue; if(p.applies==='ld'&&loc)continue; pp[i]=P[p.who]; ps[i]=p.idx; }
   }
+  // Make-up rule (c.makeup==='shift'): while a holiday or birthday takes an hour from the parent whose block it falls
+  // in, the block clock pauses, so the whole cycle shifts later. When that period ends, the pause is rounded to whole
+  // days, so exchanges keep their usual time. Vacations, custom periods and one-time changes do not pause the clock.
+  // The local schedule is never shifted.
+  const makeup=c.makeup==='shift'; let shiftH=0, shiftTotal=0, segStart=0, curSeg=0; const countsForMakeup=p=>!p.kind;
+  for(let i=0;i<N;i++){
+    const t=t0+i*HOUR; const loc=inWeekly(t);
+    if(makeup&&ps[i]!==curSeg){ // a period segment ends: snap its pause to whole days
+      if(curSeg>0){ const lostH=shiftH-segStart; const snapped=Math.round(lostH/24)*24; shiftH=segStart+snapped; shiftTotal+=snapped/24; }
+      curSeg=ps[i]; segStart=shiftH;
+    }
+    const regular=loc?weeklyParent(t):blockParent(makeup?t-shiftH*HOUR:t);
+    if(ps[i]>0){
+      par[i]=pp[i]; src[i]=ps[i];
+      if(makeup&&!loc&&countsForMakeup(periods[ps[i]-1])&&pp[i]!==regular)shiftH++;
+    } else { par[i]=regular; }
+  }
+  if(makeup&&curSeg>0){ const lostH=shiftH-segStart; const snapped=Math.round(lostH/24)*24; shiftH=segStart+snapped; shiftTotal+=snapped/24; }
   const limitH=(+c.limit||21)*24; let movedH=0;
   if(c.mode==='cap'){
     let i=0;
@@ -191,7 +210,7 @@ function computeSchedule(c){
     const ex=exchanges.some(x=>x.t>=t&&x.t<t+DAYMS);
     days[ymd(t)]={first,second,firstH,m,f,hol,cap,bad,ex,pname,ppri,pwho,chg};
   }
-  return {t0,t1,y0,years,segs,exchanges,summary,over,days,periods,limitH,movedH,ldStart:(weeklyPhase&&begins!=='never')?ldStart:null,ldEnd,weeklyPhase,begins,noMove,inLocal:inWeekly};
+  return {t0,t1,y0,years,segs,exchanges,summary,over,days,periods,limitH,movedH,shiftDays:shiftTotal,ldStart:(weeklyPhase&&begins!=='never')?ldStart:null,ldEnd,weeklyPhase,begins,noMove,inLocal:inWeekly};
 }
 
 // ===================== State to engine config =====================
@@ -209,7 +228,7 @@ function configFrom(S,withChanges,base){
   for(const b of Object.values(birthdays))b.who=resolveWho(b.who,S);
   for(const cu of customs)cu.who=resolveWho(cu.who,S);
   const begins=S.regular.on?S.phase.begins:'never';
-  return {start:S.cal.start,years:S.cal.years,limit:S.cal.limit,mode:S.cal.mode,
+  return {start:S.cal.start,years:S.cal.years,limit:S.cal.limit,mode:S.cal.mode,makeup:S.cal.makeup||'none',
     pattern:String(S.regular.pattern||'').split(/[,\s/-]+/).filter(Boolean),first:resolveWho(S.regular.first,S),xtime:S.regular.xtime||'12:00',
     begins,move:S.phase.move||null,movePre:+S.phase.movePre||0,ldDate:S.phase.ldDate||null,ldEnd:S.phase.ldEnd||null,weeklyOn:!!S.phase.weeklyOn,weekly:(S.phase.weekly.rows||[]).map(r=>({...r,parent:resolveWho(r.parent,S)})),weeksPerCycle:+S.phase.weeksPerCycle||2,weekAnchor:S.phase.weekAnchor,
     holidays,birthdays,customs,names};
