@@ -14,15 +14,21 @@ migrate((app) => {
   families.fields.getByName("code").hidden = true;
   app.save(families);
 
-  // A parent must be able to leave: no required reference may point at a member.
-  const proposals = app.findCollectionByNameOrId("proposals");
-  proposals.fields.getByName("proposed_by").required = false;
-  app.save(proposals);
+  // A parent who leaves keeps their member row (marked left) so every record entry, proposal and invitation stays
+  // attributed to them; deleting the row would blank those references.
+  members.fields.add(new BoolField({ name: "left" }));
+  members.fields.add(new DateField({ name: "left_at" }));
+  app.save(members);
+
+  // Behind Caddy the client address arrives in X-Forwarded-For; rate limits must count per client, not per proxy.
+  const ps = app.settings();
+  ps.trustedProxy.headers = ["X-Forwarded-For"];
+  ps.trustedProxy.useLeftmostIP = true;
+  app.save(ps);
 
   // Feed tokens never leave the server through the record API; the routes hand each account its own.
   const mf = members.fields.getByName("feed_token");
   mf.hidden = true;
-  app.save(members);
 
   const viewers = new Collection({
     name: "viewers",
@@ -83,9 +89,8 @@ migrate((app) => {
   families.fields.getByName("users").maxSelect = 2;
   families.fields.getByName("code").hidden = false;
   app.save(families);
-  const proposals = app.findCollectionByNameOrId("proposals");
-  proposals.fields.getByName("proposed_by").required = true;
-  app.save(proposals);
+  members.fields.removeByName("left"); members.fields.removeByName("left_at");
+  app.save(members);
   const members = app.findCollectionByNameOrId("members");
   members.fields.getByName("feed_token").hidden = false;
   app.save(members);

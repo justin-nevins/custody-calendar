@@ -43,14 +43,15 @@ const ACC = (() => {
     await loadMe(); A.view = A.me && A.me.family ? (isViewer() || A.me.me.confirmed ? 'dash' : 'confirm') : 'start'; A.msg = ''; subscribe();
   }
   function signOutLocal() { A.auth = null; A.me = null; A.view = 'signin'; A.propDays = new Set(); A.propEx = []; lsSet(KEY, null); unsubscribe(); }
-  function signOut() { signOutLocal(); A.approved = null; lsSet(APPROVED_KEY, null); A.msg = 'Signed out. The calendar in this browser is kept.'; render(); }
+  function signOut() { const v = isViewer() || !!lsGet('cc_viewer'); signOutLocal(); A.approved = null; lsSet(APPROVED_KEY, null); lsSet('cc_viewer', null); if (v) { STATE = planDefaults(); rebuild(); A.msg = 'Signed out. The parents\' calendar is no longer shown on this device.'; } else A.msg = 'Signed out. The calendar in this browser is kept.'; render(); }
 
   // ---------- family ----------
   async function loadMe() {
     if (!A.auth) return;
     const me = await api('GET', '/api/cc/me');
-    const wasViewer = isViewer();
+    const wasViewer = isViewer() || !!lsGet('cc_viewer');
     A.me = me;
+    if (me.family && me.readonly) lsSet('cc_viewer', true); else lsSet('cc_viewer', null);
     if (wasViewer && !me.family) { STATE = planDefaults(); rebuild(); A.err = 'A parent ended your access to that calendar. It is no longer shown on this device.'; A.view = 'start'; }
     if (me.family) adoptApproved(me.family.settings); else { A.approved = null; lsSet(APPROVED_KEY, null); }
     computeProposalMarks();
@@ -69,10 +70,11 @@ const ACC = (() => {
   function isViewer() { return !!(A.me && A.me.readonly); }
   const VLABEL = { attorney: 'attorney', mediator: 'mediator', gal: 'guardian ad litem', other: 'third party' };
   function viewerText(v) { return `${v.name} (${VLABEL[v.label] || v.label}${v.for_role ? ` for ${roleName(v.for_role)}` : ''})`; }
-  function other() { return inFamily() ? A.me.members.find((m) => !m.me) || null : null; }
+  function active() { return inFamily() ? A.me.members.filter((m) => !m.left) : []; }
+  function other() { return inFamily() ? active().find((m) => !m.me) || null : null; }
   function roleName(role) { const s = A.approved || STATE; return CCEngine.slotName(s, role); }
   function otherName() { const o = other(); return o ? roleName(o.role) : 'the other parent'; }
-  function alone() { return inFamily() && A.me.members.length < 2; }
+  function alone() { return inFamily() && active().length < 2; }
 
   async function createFamily(role) {
     if (!STATE) throw new Error('Set up the calendar first.');
@@ -83,7 +85,7 @@ const ACC = (() => {
   }
   async function join(code) {
     const d = await api('POST', '/api/cc/join', { code });
-    A.me = Object.assign({ user: A.me && A.me.user }, d); adoptApproved(d.family.settings); computeProposalMarks(); A.view = d.readonly || d.me.confirmed ? 'dash' : 'confirm'; A.msg = d.readonly ? 'You now view this calendar. Nothing you change here reaches the parents; it stays a what-if on this device.' : ''; subscribe();
+    A.me = Object.assign({ user: A.me && A.me.user }, d); adoptApproved(d.family.settings); computeProposalMarks(); A.view = d.readonly || d.me.confirmed ? 'dash' : 'confirm'; startViewerPoll(); A.msg = d.readonly ? 'You now view this calendar. Nothing you change here reaches the parents; it stays a what-if on this device.' : ''; subscribe();
   }
   async function confirm() { const d = await api('POST', '/api/cc/confirm', {}); A.me = Object.assign({ user: A.me.user }, d); adoptApproved(d.family.settings); computeProposalMarks(); A.view = 'dash'; A.msg = 'Confirmed. Both calendars now update together.'; }
   async function rotateFeed() { const d = await api('POST', '/api/cc/feed/rotate', {}); A.me.me.feed = d.feed; A.msg = 'New calendar address made. The old one stopped working.'; }
@@ -154,6 +156,8 @@ const ACC = (() => {
     } catch (e) {}
   }
   function unsubscribe() { if (A.es) { try { A.es.close(); } catch (e) {} A.es = null; } }
+  let viewerPoll = null;
+  function startViewerPoll() { clearInterval(viewerPoll); if (isViewer()) viewerPoll = setInterval(async () => { try { await loadMe(); if (!inFamily()) { clearInterval(viewerPoll); go('acct'); } else render(); } catch (e) {} }, 120000); }
   function scheduleReload() { clearTimeout(A.loadTimer); A.loadTimer = setTimeout(async () => { try { await loadMe(); render(); } catch (e) {} }, 400); }
 
   // ---------- start ----------
@@ -167,7 +171,7 @@ const ACC = (() => {
       try { const d = await api('POST', '/api/collections/users/auth-refresh'); A.auth = { token: d.token, user: d.record }; lsSet(KEY, A.auth); await loadMe(); A.view = inFamily() ? (isViewer() || A.me.me.confirmed ? 'dash' : 'confirm') : 'start'; subscribe(); }
       catch (e) { if (!A.auth) A.view = 'signin'; else A.err = 'Could not reach the server; showing the last approved calendar saved on this device.'; }
     } else if (A.pending) A.view = 'code';
-    A.ready = true; if (wantAcct) go('acct'); else { render(); rerender(); } updateTab();
+    A.ready = true; startViewerPoll(); if (wantAcct) go('acct'); else { render(); rerender(); } updateTab();
   }
 
   // ---------- rendering ----------
@@ -231,7 +235,7 @@ const ACC = (() => {
       <div class="row" style="margin-top:12px"><button class="btn primary" data-acct="confirm">Confirm this schedule</button><button class="btn" data-go="cal">Look at the calendar first</button><button class="btn quiet" data-acct="view" data-arg="record">See the record</button></div></div></div>`;
   }
   function propItem(p, mine) {
-    const by = roleName(A.me.members.find((m) => m.id === p.proposed_by) ? A.me.members.find((m) => m.id === p.proposed_by).role : 'M');
+    const pm = A.me.members.find((m) => m.id === p.proposed_by); const by = pm ? roleName(pm.role) + (pm.left ? ' (left)' : '') : 'a parent no longer on record';
     const when = fDT(parseDateTime(p.created));
     const pill = p.status === 'open' ? `<span class="pill w">${isViewer() ? 'open' : mine ? 'waiting' : 'needs your answer'}</span>` : p.status === 'approved' ? `<span class="pill ok">approved${p.unconfirmed ? ', not yet confirmed' : ''}</span>` : `<span class="pill">${E(p.status)}</span>`;
     let actions = '';
@@ -270,7 +274,7 @@ const ACC = (() => {
     return `<div class="acct">
       <div class="today">
         <div><span class="eyebrow">Next exchange</span>${nx ? `<span class="big">${fD(nx.t)}, <span class="mono">${hm(nx.t)}</span></span><span class="small muted">to <span class="who ${nx.to}">${E(roleName(nx.to))}</span> · ${humanWhy(nx)}</span>` : '<span class="big">none in range</span>'}</div>
-        <div><span class="eyebrow">Parents</span><span class="big"><span class="who M">${E(roleName('M'))}</span> &nbsp; <span class="who F">${E(roleName('F'))}</span></span><span class="small muted">${A.me.members.length === 2 ? 'Both parents are linked.' : 'One parent has set this up; the other has not joined yet.'}</span></div>
+        <div><span class="eyebrow">Parents</span><span class="big"><span class="who M">${E(roleName('M'))}</span> &nbsp; <span class="who F">${E(roleName('F'))}</span></span><span class="small muted">${active().length === 2 ? 'Both parents are linked.' : 'One parent has set this up; the other has not joined yet.'}</span></div>
         <div><span class="eyebrow">You</span><span class="big">${E(me.name)}</span><span class="small muted">${E(VLABEL[me.label] || me.label)}${me.for_role ? ` for ${E(roleName(me.for_role))}` : ''} · read-only · ${E(A.me.user.email)}</span></div>
       </div>
       <div class="notice">You see the calendar the parents share, every proposal and the record. You can open Settings and Setup and try changes; they stay on this device as a what-if and never reach the parents. Either parent can end this access.</div>
@@ -304,7 +308,7 @@ const ACC = (() => {
       <p class="small muted">Unlinking keeps the calendar in this browser as it is now; the shared record stays with the other parent.</p></div></div>`;
   }
   function recordHtml() {
-    const rows = A.me.events.map((ev) => { const m = A.me.members.find((x) => x.id === ev.actor); return `<tr><td class="mono small">${E(fDT(parseDateTime(ev.at)))}</td><td>${E(ev.action)}</td><td>${E(ev.detail)}</td><td>${m ? E(roleName(m.role)) : ''}</td></tr>`; }).join('');
+    const rows = A.me.events.map((ev) => { const m = A.me.members.find((x) => x.id === ev.actor); return `<tr><td class="mono small">${E(fDT(parseDateTime(ev.at)))}</td><td>${E(ev.action)}</td><td>${E(ev.detail)}</td><td>${m ? E(roleName(m.role)) + (m.left ? ' (left)' : '') : ''}</td></tr>`; }).join('');
     return `<div class="acct"><div class="card"><div class="row" style="justify-content:space-between"><div><span class="eyebrow">Record</span><h2>Every change to the calendar</h2><p class="muted">Who asked, who decided, and when. Nothing here can be edited or removed. Version numbers count approved changes to the shared settings.</p></div><button class="btn" data-acct="view" data-arg="dash">Back to the dashboard</button></div>
       <div class="tblbox"><table class="tbl"><thead><tr><th>When</th><th>What</th><th>Detail</th><th>By</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">Nothing yet.</td></tr>'}</tbody></table></div>
       <div class="row" style="margin-top:10px"><button class="btn sm" data-acct="copyRecord">Copy as text</button></div></div></div>`;
