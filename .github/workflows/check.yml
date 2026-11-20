@@ -26,7 +26,7 @@ jobs:
           node --check engine.js
           for f in server/pb_hooks/*.js server/pb_migrations/*.js; do node --check "$f"; done
       - name: Engine runs
-        run: node -e 'const E=require("./engine.js"); const r=E.build({v:5,parents:{M:{role:"mother"},F:{role:"father"}},children:[],pbd:{M:{},F:{}},regular:{on:true,pattern:"21,11",first:"father",xtime:"12:00"},phase:{begins:"start",weeklyOn:true,weekAnchor:"2026-12-28",weeksPerCycle:2,weekly:{rows:E.WEEKLY_PLAN}},holidays:{},customs:[],vacations:{list:[]},changes:[],cal:{start:"2026-12-01",years:1,limit:21,mode:"cap"}}); if(r.result.exchanges.length<5)process.exit(1); console.log("engine ok", r.result.exchanges.length, "exchanges")'
+        run: node -e 'const E=require("./engine.js"); const r=E.build({v:5,parents:{M:{role:"mother"},F:{role:"father"}},children:[],pbd:{M:{},F:{}},regular:{on:true,pattern:"21,11",first:"father",xtime:"12:00"},phase:{begins:"start",weeklyOn:true,weekAnchor:"2026-12-28",weeksPerCycle:2,weekly:{rows:E.WEEKLY_PLAN}},holidays:{},customs:[],vacations:{list:[]},changes:[],cal:{start:"2026-12-01",years:2,limit:21,mode:"cap"}}); if(r.result.exchanges.length<5)process.exit(1); console.log("engine ok", r.result.exchanges.length, "exchanges")'
       - name: HTML parses
         run: |
           python3 - <<'PY'

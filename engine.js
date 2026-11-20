@@ -13,7 +13,11 @@ const ymd=t=>new Date(t).toISOString().slice(0,10);
 const hm=t=>new Date(t).toISOString().slice(11,16);
 const DOWN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const dow=t=>new Date(t).getUTCDay();
-const parseDate=s=>{const m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec((s||'').trim());return m?utc(+m[1],+m[2],+m[3]):null};
+// Dates are typed and shown as MM-DD-YYYY (MM/DD/YYYY also read); YYYY-MM-DD is the stored form and is read too.
+const mkDate=(y,mo,d)=>{ if(mo<1||mo>12||d<1||d>31)return null; const t=utc(y,mo,d); return new Date(t).getUTCDate()===d?t:null; };
+const parseDate=s=>{s=(s||'').trim(); let m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s); if(m)return mkDate(+m[1],+m[2],+m[3]); m=/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/.exec(s); return m?mkDate(+m[3],+m[1],+m[2]):null};
+const usd=t=>{const d=new Date(t);return `${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}-${d.getUTCFullYear()}`};
+const usdStr=s=>{const t=parseDate(s);return t===null?(s||''):usd(t)};
 const parseHours=s=>{s=(s||'').trim(); if(s==='24:00'||s==='end')return 24; const m=/^(\d{1,2})(?::(\d{2}))?$/.exec(s); return m?Math.min(24,+m[1]):0};
 const nth=(y,m,n,wd)=>{let t=utc(y,m,1);const off=(wd-dow(t)+7)%7;return addD(t,off+7*(n-1))};
 const last=(y,m,wd)=>{let t=utc(y,m+1,0);const off=(dow(t)-wd+7)%7;return addD(t,-off)};
@@ -75,7 +79,7 @@ function whoFor(who,y){ if(who==='M'||who==='F')return who; if(who==='Modd')retu
 function parsePeriods(text){
   const out=[];
   for(const part of (text||'').split(/[;\n]/)){
-    const m=/^\s*(\d{4}-\d{1,2}-\d{1,2})(?:\s+(\d{1,2}:\d{2}))?\s*(?:to|-|–)\s*(\d{4}-\d{1,2}-\d{1,2})(?:\s+(\d{1,2}:\d{2}))?\s*$/.exec(part);
+    const m=/^\s*(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[-\/]\d{1,2}[-\/]\d{4})(?:\s+(\d{1,2}:\d{2}))?\s*(?:to|–|-)\s*(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[-\/]\d{1,2}[-\/]\d{4})(?:\s+(\d{1,2}:\d{2}))?\s*$/.exec(part);
     if(!m)continue;
     const a=parseDate(m[1]),b=parseDate(m[3]); if(a===null||b===null)continue;
     const s=a+parseHours(m[2]||'0:00')*HOUR, e=b+parseHours(m[4]||'24:00')*HOUR;
@@ -276,5 +280,5 @@ function diffDays(a,b){ const out=[]; const keys=new Set([...Object.keys(a.days)
 // Exchanges in b that are not in a, and in a not in b.
 function diffExchanges(a,b){ const key=x=>`${x.t}|${x.from}|${x.to}`; const A=new Set(a.exchanges.map(key)), B=new Set(b.exchanges.map(key)); return {added:b.exchanges.filter(x=>!A.has(key(x))),removed:a.exchanges.filter(x=>!B.has(key(x)))}; }
 
-return {HOUR,DAYMS,utc,addD,ymd,hm,DOWN,dow,parseDate,parseHours,nth,last,monBefore,monOnOrBefore,easter,fixed,CAT,PLANSET,WEEKLY_PLAN,ROLE_TOKENS,roles,resolveWho,slotName,entryName,whoFor,parsePeriods,periodsFor,computeSchedule,configFrom,changePeriod,build,applyProposal,diffSettings,icsText,diffDays,diffExchanges};
+return {HOUR,DAYMS,utc,addD,ymd,hm,usd,usdStr,DOWN,dow,parseDate,parseHours,nth,last,monBefore,monOnOrBefore,easter,fixed,CAT,PLANSET,WEEKLY_PLAN,ROLE_TOKENS,roles,resolveWho,slotName,entryName,whoFor,parsePeriods,periodsFor,computeSchedule,configFrom,changePeriod,build,applyProposal,diffSettings,icsText,diffDays,diffExchanges};
 });
