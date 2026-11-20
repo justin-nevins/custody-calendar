@@ -362,7 +362,7 @@ function planDefaults(){
     regular:{on:true,preset:'ld',pattern:'21,11',first:'father',xtime:'12:00',place:''},
     phase:{begins:'move',move:'',movePre:5,ldDate:'',ldEnd:'',weeklyOn:true,weekAnchor:'2026-12-28',weeksPerCycle:2,weekly:{rows:WEEKLY_PLAN.map(r=>({...r})),place:''}},
     holidays, customs:[],
-    vacations:{allow:{M:14,F:14},notice:30,maxLen:14,list:[]},
+    vacations:{allow:{M:14,F:14},notice:0,maxLen:14,list:[]},
     changes:[], xrules:[],
     cal:{start:startYm,years:3,limit:21,mode:'cap',makeup:'none',makeupVac:false}};
 }
@@ -627,7 +627,7 @@ function secHtml(id){
     <h3>Birthdays</h3><p class="small muted">Set under Parents and children. <button class="btn sm" data-sec="people">Open</button></p>
     <details class="help"><summary>Which wins when two overlap</summary><ol><li>One-time changes</li><li>Birthdays, Mother's Day, Father's Day</li><li>Thanksgiving, Christmas, New Year</li><li>Vacations</li><li>Other holidays</li><li>The schedule in force (long distance or local)</li></ol></details>`; }
   case 'vac': { const V=S.vacations; const Y=new Date().getFullYear(); return `<div class="head"><div><h2>Vacations</h2><p class="muted">The allowance from the plan, and the vacations actually planned. A vacation takes time from the other parent's regular schedule; holidays still win.</p></div><button class="btn sm primary" data-act="addVac">+ Add a vacation</button></div>
-    <div class="form four">${fld(`${esc(PN('M'))}, days a year`,inp('vacations.allow.M',{type:'number',num:true,min:0}))}${fld(`${esc(PN('F'))}, days a year`,inp('vacations.allow.F',{type:'number',num:true,min:0}))}${fld('Notice required (days)',inp('vacations.notice',{type:'number',num:true,min:0}))}${fld('Longest single vacation (days)',inp('vacations.maxLen',{type:'number',num:true,min:0}))}</div>
+    <div class="form four">${fld(`${esc(PN('M'))}, days a year`,inp('vacations.allow.M',{type:'number',num:true,min:0}))}${fld(`${esc(PN('F'))}, days a year`,inp('vacations.allow.F',{type:'number',num:true,min:0}))}${fld('Notice required (days, 0 = none)',inp('vacations.notice',{type:'number',num:true,min:0}))}${fld('Longest single vacation (days)',inp('vacations.maxLen',{type:'number',num:true,min:0}))}</div>
     <div class="row small muted">${[Y,Y+1].map(y=>`<span class="pill">${y}: ${esc(PN('M'))} ${fmt1(vacUsed('M',y))} of ${V.allow.M} · ${esc(PN('F'))} ${fmt1(vacUsed('F',y))} of ${V.allow.F}</span>`).join('')}</div>
     <div class="list">${V.list.length?V.list.map((v,i)=>{ const open=UI.openVac===v.id; const w=vacWarnings(v); return `<div class="item${open?' open':''}"><span class="pill h">vacation</span><div><b><span class="who ${v.who}">${esc(PN(v.who))}</span>${v.note?' · '+esc(v.note):''}</b>${appliesTag(v.applies)}<div class="res">${v.s&&v.e?`${fD(parseDate(v.s))} ${esc(v.sh)} to ${fD(parseDate(v.e))} ${esc(v.eh)}`:'dates missing'}${w.length?`<br><span class="warnt">${w.map(esc).join(' ')}</span>`:''}</div></div><span class="row"><button class="btn sm" data-act="vacEdit" data-arg="${v.id}">${open?'Close':'Edit'}</button><button class="btn sm danger" data-act="rmVac" data-arg="${i}">Remove</button></span>
       ${open?`<div class="sub"><div class="form tight">${fld('Parent',sel(`vacations.list.${i}.who`,[['M',PN('M')],['F',PN('F')]]))}${fld('First day',inp(`vacations.list.${i}.s`,{type:'date'}))}${fld('from',inp(`vacations.list.${i}.sh`,{type:'time'}))}${fld('Last day',inp(`vacations.list.${i}.e`,{type:'date'}))}${fld('until',inp(`vacations.list.${i}.eh`,{type:'time'}))}${fld('Note',inp(`vacations.list.${i}.note`,{ph:'Summer trip'}))}${fld('Applies under',sel(`vacations.list.${i}.applies`,APPLIES))}</div></div>`:''}</div>`; }).join(''):'<div class="item"><span></span><span class="muted">No vacations planned.</span><span></span></div>'}</div>
@@ -672,7 +672,7 @@ function reviewHtml(){ const S=STATE; const hol=Object.entries(S.holidays).filte
    <dt>Exchanges</dt><dd>${(S.xrules||[]).length?(S.xrules||[]).map(r=>esc(xruleText(r))).join('; '):'usual place and time'}</dd>
    <dt><a href="#" data-step="2">In force</a></dt><dd>${esc(phaseText())}</dd>
    <dt><a href="#" data-step="4">Holidays</a></dt><dd>${hol.length} selected: ${esc(hol.join(', '))}</dd>
-   <dt><a href="#" data-step="5">Vacations</a></dt><dd>${S.vacations.allow.M} and ${S.vacations.allow.F} days a year, ${S.vacations.notice} days notice, ${S.vacations.list.length} planned</dd>
+   <dt><a href="#" data-step="5">Vacations</a></dt><dd>${S.vacations.allow.M} and ${S.vacations.allow.F} days a year, ${S.vacations.notice>0?S.vacations.notice+' days notice':'no notice period'}, ${S.vacations.list.length} planned</dd>
    <dt><a href="#" data-step="6">Limit</a></dt><dd>${S.cal.limit} days; ${S.cal.mode==='cap'?'extra days go to the other parent':'only marked'}; ${S.cal.makeup==='shift'?'lost holiday days added back, cycle shifts':S.cal.makeup==='fixed'?'lost holiday days added to the end of the block, cycle dates fixed':'lost holiday days not made up'}${S.cal.makeup!=='none'&&S.cal.makeupVac?' (vacations too)':''}; calendar from ${esc(usdStr(S.cal.start))} for ${S.cal.years} years</dd>
   </dl></div>
   ${ERR?`<div class="notice warn">${esc(ERR)}</div>`:stripHtml()}
@@ -735,7 +735,7 @@ document.addEventListener('click',async e=>{
     case 'rmRow': S.phase.weekly.rows.splice(+arg,1); rerender(); return;
     case 'holOn': { const h=CAT.find(x=>x.id===arg); if(!S.holidays[arg])S.holidays[arg]={on:false,...(h.plan||{who:'motherOdd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[arg]||{}),dates:'',applies:h.sameCity?'local':'both'}; S.holidays[arg].on=b.checked; rerender(); return; }
     case 'holEdit': { const h=CAT.find(x=>x.id===arg); if(!S.holidays[arg])S.holidays[arg]={on:false,...(h.plan||{who:'motherOdd',before:0,after:0,start:'00:00',end:'24:00'}),...(PLANSET[arg]||{}),dates:'',applies:h.sameCity?'local':'both'}; UI.openHol=UI.openHol===arg?null:arg; render(); return; }
-    case 'addVac': { const id=uid(); const s=addD(todayT(),S.vacations.notice||30); S.vacations.list.push({id,who:'M',s:ymd(s),sh:'10:00',e:ymd(addD(s,7)),eh:'10:00',note:''}); UI.openVac=id; rerender(); return; }
+    case 'addVac': { const id=uid(); const s=addD(todayT(),S.vacations.notice>0?S.vacations.notice:7); S.vacations.list.push({id,who:'M',s:ymd(s),sh:'10:00',e:ymd(addD(s,7)),eh:'10:00',note:''}); UI.openVac=id; rerender(); return; }
     case 'vacEdit': UI.openVac=UI.openVac===arg?null:arg; render(); return;
     case 'rmVac': S.vacations.list.splice(+arg,1); rerender(); return;
     case 'addCustom': S.customs.push({name:'Custom period',who:'M',dates:'',pri:3}); rerender(); return;
