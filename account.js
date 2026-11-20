@@ -40,16 +40,19 @@ const ACC = (() => {
   async function authOtp(otpId, password) {
     const d = await api('POST', '/api/collections/users/auth-with-otp', { otpId, password });
     A.auth = { token: d.token, user: d.record }; lsSet(KEY, A.auth); A.pending = null; try { sessionStorage.removeItem(PENDING_KEY); } catch (e) {}
-    await loadMe(); A.view = A.me && A.me.family ? (A.me.me.confirmed ? 'dash' : 'confirm') : 'start'; A.msg = ''; subscribe();
+    await loadMe(); A.view = A.me && A.me.family ? (isViewer() || A.me.me.confirmed ? 'dash' : 'confirm') : 'start'; A.msg = ''; subscribe();
   }
   function signOutLocal() { A.auth = null; A.me = null; A.view = 'signin'; A.propDays = new Set(); A.propEx = []; lsSet(KEY, null); unsubscribe(); }
-  function signOut() { signOutLocal(); A.approved = null; lsSet(APPROVED_KEY, null); A.msg = 'Signed out. The calendar in this browser is kept.'; render(); }
+  function signOut() { const v = isViewer() || !!lsGet('cc_viewer'); signOutLocal(); A.approved = null; lsSet(APPROVED_KEY, null); lsSet('cc_viewer', null); if (v) { STATE = planDefaults(); rebuild(); A.msg = 'Signed out. The parents\' calendar is no longer shown on this device.'; } else A.msg = 'Signed out. The calendar in this browser is kept.'; render(); }
 
   // ---------- family ----------
   async function loadMe() {
     if (!A.auth) return;
     const me = await api('GET', '/api/cc/me');
+    const wasViewer = isViewer() || !!lsGet('cc_viewer');
     A.me = me;
+    if (me.family && me.readonly) lsSet('cc_viewer', true); else lsSet('cc_viewer', null);
+    if (wasViewer && !me.family) { STATE = planDefaults(); rebuild(); A.err = 'A parent ended your access to that calendar. It is no longer shown on this device.'; A.view = 'start'; }
     if (me.family) adoptApproved(me.family.settings); else { A.approved = null; lsSet(APPROVED_KEY, null); }
     computeProposalMarks();
   }
@@ -58,16 +61,20 @@ const ACC = (() => {
     const prevApproved = A.approved; A.approved = clone(settings); lsSet(APPROVED_KEY, A.approved);
     const dirty = prevApproved ? isDirty(prevApproved) : false; // was the local STATE a draft against the previous approved copy?
     if (!dirty) { if (!lsGet('cc5_before_join') && !prevApproved && STATE && !sameSettings(STATE, settings)) lsSet('cc5_before_join', STATE); STATE = clone(settings); STATE.setupDone = true; rebuild(); }
-    else UI.note = 'The shared calendar changed while you were editing. Your draft is kept; send or discard it to see the latest.';
+    else UI.note = isViewer() ? 'The shared calendar changed while you were trying things. Your what-if is kept; press Back to the shared calendar to see the latest.' : 'The shared calendar changed while you were editing. Your draft is kept; send or discard it to see the latest.';
   }
   const stripVolatile = (s) => { const c = clone(s); delete c.setupDone; return c; };
   const sameSettings = (a, b) => CCEngine.stable(stripVolatile(a)) === CCEngine.stable(stripVolatile(b));
   function isDirty(ref) { return !!(A.approved && STATE && !sameSettings(STATE, ref || A.approved)); }
   function inFamily() { return !!(A.me && A.me.family); }
-  function other() { return inFamily() ? A.me.members.find((m) => !m.me) || null : null; }
+  function isViewer() { return !!(A.me && A.me.readonly); }
+  const VLABEL = { attorney: 'attorney', mediator: 'mediator', gal: 'guardian ad litem', other: 'third party' };
+  function viewerText(v) { return `${v.name} (${VLABEL[v.label] || v.label}${v.for_role ? ` for ${roleName(v.for_role)}` : ''})`; }
+  function active() { return inFamily() ? A.me.members.filter((m) => !m.left) : []; }
+  function other() { return inFamily() ? active().find((m) => !m.me) || null : null; }
   function roleName(role) { const s = A.approved || STATE; return CCEngine.slotName(s, role); }
   function otherName() { const o = other(); return o ? roleName(o.role) : 'the other parent'; }
-  function alone() { return inFamily() && A.me.members.length < 2; }
+  function alone() { return inFamily() && active().length < 2; }
 
   async function createFamily(role) {
     if (!STATE) throw new Error('Set up the calendar first.');
@@ -78,7 +85,7 @@ const ACC = (() => {
   }
   async function join(code) {
     const d = await api('POST', '/api/cc/join', { code });
-    A.me = Object.assign({ user: A.me && A.me.user }, d); adoptApproved(d.family.settings); computeProposalMarks(); A.view = d.me.confirmed ? 'dash' : 'confirm'; A.msg = ''; subscribe();
+    A.me = Object.assign({ user: A.me && A.me.user }, d); adoptApproved(d.family.settings); computeProposalMarks(); A.view = d.readonly || d.me.confirmed ? 'dash' : 'confirm'; startViewerPoll(); A.msg = d.readonly ? 'You now view this calendar. Nothing you change here reaches the parents; it stays a what-if on this device.' : ''; subscribe();
   }
   async function confirm() { const d = await api('POST', '/api/cc/confirm', {}); A.me = Object.assign({ user: A.me.user }, d); adoptApproved(d.family.settings); computeProposalMarks(); A.view = 'dash'; A.msg = 'Confirmed. Both calendars now update together.'; }
   async function rotateFeed() { const d = await api('POST', '/api/cc/feed/rotate', {}); A.me.me.feed = d.feed; A.msg = 'New calendar address made. The old one stopped working.'; }
@@ -87,7 +94,7 @@ const ACC = (() => {
   // ---------- drafts and proposals ----------
   // The draft on this device becomes one proposal per item changed, plus one for the settings if they differ.
   function draftProposals() {
-    if (!inFamily() || !isDirty()) return [];
+    if (!inFamily() || isViewer() || !isDirty()) return [];
     const a = A.approved, b = clone(STATE); const d = CCEngine.diffSettings(a, b); const out = [];
     for (const it of d.items) {
       if (it.op === 'remove') out.push({ kind: 'remove', payload: { list: it.list, id: it.item.id }, summary: `Remove: ${itemText(it.list, it.item)}` });
@@ -149,6 +156,8 @@ const ACC = (() => {
     } catch (e) {}
   }
   function unsubscribe() { if (A.es) { try { A.es.close(); } catch (e) {} A.es = null; } }
+  let viewerPoll = null;
+  function startViewerPoll() { clearInterval(viewerPoll); if (isViewer()) viewerPoll = setInterval(async () => { try { await loadMe(); if (!inFamily()) { clearInterval(viewerPoll); go('acct'); } else render(); } catch (e) {} }, 120000); }
   function scheduleReload() { clearTimeout(A.loadTimer); A.loadTimer = setTimeout(async () => { try { await loadMe(); render(); } catch (e) {} }, 400); }
 
   // ---------- start ----------
@@ -159,25 +168,26 @@ const ACC = (() => {
     if (m) { history.replaceState(null, '', location.pathname + location.search); try { await authOtp(m[1], m[2]); go('acct'); return; } catch (e) { A.err = 'That sign-in link did not work (used already or older than 15 minutes). Ask for a new one.'; A.view = 'signin'; go('acct'); return; } }
     let wantAcct = false; if (location.hash === '#acct') { history.replaceState(null, '', location.pathname + location.search); wantAcct = true; }
     if (A.auth) {
-      try { const d = await api('POST', '/api/collections/users/auth-refresh'); A.auth = { token: d.token, user: d.record }; lsSet(KEY, A.auth); await loadMe(); A.view = inFamily() ? (A.me.me.confirmed ? 'dash' : 'confirm') : 'start'; subscribe(); }
+      try { const d = await api('POST', '/api/collections/users/auth-refresh'); A.auth = { token: d.token, user: d.record }; lsSet(KEY, A.auth); await loadMe(); A.view = inFamily() ? (isViewer() || A.me.me.confirmed ? 'dash' : 'confirm') : 'start'; subscribe(); }
       catch (e) { if (!A.auth) A.view = 'signin'; else A.err = 'Could not reach the server; showing the last approved calendar saved on this device.'; }
     } else if (A.pending) A.view = 'code';
-    A.ready = true; if (wantAcct) go('acct'); else { render(); rerender(); } updateTab();
+    A.ready = true; startViewerPoll(); if (wantAcct) go('acct'); else { render(); rerender(); } updateTab();
   }
 
   // ---------- rendering ----------
   const E = (s) => esc(s);
-  function needsMe() { return inFamily() ? A.me.proposals.filter((p) => p.status === 'open' && p.proposed_by !== A.me.me.id) : []; }
+  function needsMe() { return inFamily() && !isViewer() ? A.me.proposals.filter((p) => p.status === 'open' && p.proposed_by !== A.me.me.id) : []; }
   function updateTab() {
     const t = document.getElementById('tab-acct'); if (!t) return;
     const n = needsMe().length;
     t.innerHTML = A.auth ? `Dashboard${n ? ` <span class="badge">${n}</span>` : ''}` : 'Sign in';
-    const tag = document.querySelector('.brand .tag'); if (tag) tag.textContent = inFamily() ? `shared with ${E(otherName())}` : 'works without an account; sign in to share it with the other parent';
+    const tag = document.querySelector('.brand .tag'); if (tag) tag.textContent = isViewer() ? `read-only view of ${E(roleName('M'))} and ${E(roleName('F'))}'s calendar` : inFamily() ? `shared with ${E(otherName())}` : 'works without an account; sign in to share it with the other parent';
   }
   // Banner shown on the Calendar and Settings places while a draft is unsent or a proposal waits.
   function banner() {
     if (!A.ready || !inFamily()) return '';
     let h = '';
+    if (isViewer()) { if (isDirty()) h += `<div class="banner draft"><span><b>What-if.</b> These changes exist only on this device. The parents' shared calendar is unchanged, and viewers cannot change it.</span><span class="row"><button class="btn sm" data-acct="discard">Back to the shared calendar</button></span></div>`; return h; }
     if (isDirty()) { const n = draftProposals().length; h += `<div class="banner draft"><span><b>Draft.</b> ${n === 1 ? 'One change' : n + ' changes'} on this device ${alone() ? 'not yet saved to the shared calendar' : `not yet sent to ${E(otherName())}`}.</span><span class="row"><button class="btn sm primary" data-acct="send">${alone() ? 'Save to the shared calendar' : `Send to ${E(otherName())} for approval`}</button><button class="btn sm quiet" data-acct="discard">Discard</button></span></div>`; }
     const n = needsMe().length; if (n) h += `<div class="banner"><span>${n === 1 ? 'A proposal from' : n + ' proposals from'} ${E(otherName())} ${n === 1 ? 'needs' : 'need'} your answer.</span><button class="btn sm" data-go="acct">Open the dashboard</button></div>`;
     if (!A.me.me.confirmed) h += `<div class="banner"><span>You have not confirmed this schedule yet. It is in force as it stands.</span><button class="btn sm" data-acct="view" data-arg="confirm">Review and confirm</button></div>`;
@@ -190,6 +200,7 @@ const ACC = (() => {
     if (A.msg) h += `<div class="banner">${E(A.msg)}</div>`;
     if (!A.auth) h += A.view === 'code' ? codeHtml() : signinHtml();
     else if (!inFamily()) h += startHtml();
+    else if (isViewer()) h += A.view === 'record' ? recordHtml() : viewerDashHtml();
     else if (A.view === 'confirm' || !A.me.me.confirmed && A.view !== 'record' && A.view !== 'link') h += confirmHtml();
     else if (A.view === 'link') h += linkHtml();
     else if (A.view === 'record') h += recordHtml();
@@ -224,13 +235,14 @@ const ACC = (() => {
       <div class="row" style="margin-top:12px"><button class="btn primary" data-acct="confirm">Confirm this schedule</button><button class="btn" data-go="cal">Look at the calendar first</button><button class="btn quiet" data-acct="view" data-arg="record">See the record</button></div></div></div>`;
   }
   function propItem(p, mine) {
-    const by = roleName(A.me.members.find((m) => m.id === p.proposed_by) ? A.me.members.find((m) => m.id === p.proposed_by).role : 'M');
+    const pm = A.me.members.find((m) => m.id === p.proposed_by); const by = pm ? roleName(pm.role) + (pm.left ? ' (left)' : '') : 'a parent no longer on record';
     const when = fDT(parseDateTime(p.created));
-    const pill = p.status === 'open' ? `<span class="pill w">${mine ? 'waiting' : 'needs your answer'}</span>` : p.status === 'approved' ? `<span class="pill ok">approved${p.unconfirmed ? ', not yet confirmed' : ''}</span>` : `<span class="pill">${E(p.status)}</span>`;
+    const pill = p.status === 'open' ? `<span class="pill w">${isViewer() ? 'open' : mine ? 'waiting' : 'needs your answer'}</span>` : p.status === 'approved' ? `<span class="pill ok">approved${p.unconfirmed ? ', not yet confirmed' : ''}</span>` : `<span class="pill">${E(p.status)}</span>`;
     let actions = '';
-    if (p.status === 'open' && !mine) actions = A.declineFor === p.id ? `<form class="row" data-acct-form="decline" data-id="${p.id}"><input name="note" required placeholder="One-line reason" autofocus style="flex:1;min-width:160px"><button class="btn sm" type="submit">Decline</button><button class="btn sm quiet" type="button" data-acct="declineCancel">Cancel</button></form>` : `<span class="row"><button class="btn sm primary" data-acct="approve" data-arg="${p.id}">Approve</button><button class="btn sm" data-acct="decline" data-arg="${p.id}">Decline</button></span>`;
-    if (p.status === 'open' && mine) actions = `<button class="btn sm quiet" data-acct="withdraw" data-arg="${p.id}">Withdraw</button>`;
-    const decided = p.decided_at ? `<br>${E(p.status)} by ${E(roleName((A.me.members.find((m) => m.id === p.decided_by) || {}).role || (mine ? other() && other().role : A.me.me.role)))} ${fDT(parseDateTime(p.decided_at))}${p.decided_note ? `: "${E(p.decided_note)}"` : ''}` : '';
+    if (isViewer()) actions = '';
+    else if (p.status === 'open' && !mine) actions = A.declineFor === p.id ? `<form class="row" data-acct-form="decline" data-id="${p.id}"><input name="note" required placeholder="One-line reason" autofocus style="flex:1;min-width:160px"><button class="btn sm" type="submit">Decline</button><button class="btn sm quiet" type="button" data-acct="declineCancel">Cancel</button></form>` : `<span class="row"><button class="btn sm primary" data-acct="approve" data-arg="${p.id}">Approve</button><button class="btn sm" data-acct="decline" data-arg="${p.id}">Decline</button></span>`;
+    else if (p.status === 'open' && mine) actions = `<button class="btn sm quiet" data-acct="withdraw" data-arg="${p.id}">Withdraw</button>`;
+    const dm = A.me.members.find((m) => m.id === p.decided_by); const decided = p.decided_at ? `<br>${E(p.status)}${dm ? ` by ${E(roleName(dm.role))}` : ''} ${fDT(parseDateTime(p.decided_at))}${p.decided_note ? `: "${E(p.decided_note)}"` : ''}` : '';
     return `<div class="item">${pill}<div><b>${E(p.summary)}</b><div class="res">Proposed by ${E(by)} · ${when}${p.note ? ` · "${E(p.note)}"` : ''}${p._preview ? `<br>Result if approved: ${E(p._preview)}` : ''}${decided}</div></div>${actions}</div>`;
   }
   function dashHtml() {
@@ -255,6 +267,34 @@ const ACC = (() => {
       ${recent.length ? `<div class="panel"><h3>Recently decided</h3><div class="list">${recent.map((p) => propItem(p, p.proposed_by === A.me.me.id)).join('')}</div></div>` : ''}
     </div>`;
   }
+  function viewerDashHtml() {
+    const r = RESULT; const now = nowT(); const nx = r && r.exchanges.find((x) => x.t > now);
+    const open = A.me.proposals.filter((p) => p.status === 'open'); const recent = A.me.proposals.filter((p) => p.status !== 'open').slice(0, 8);
+    const me = A.me.me;
+    return `<div class="acct">
+      <div class="today">
+        <div><span class="eyebrow">Next exchange</span>${nx ? `<span class="big">${fD(nx.t)}, <span class="mono">${hm(nx.t)}</span></span><span class="small muted">to <span class="who ${nx.to}">${E(roleName(nx.to))}</span> · ${humanWhy(nx)}</span>` : '<span class="big">none in range</span>'}</div>
+        <div><span class="eyebrow">Parents</span><span class="big"><span class="who M">${E(roleName('M'))}</span> &nbsp; <span class="who F">${E(roleName('F'))}</span></span><span class="small muted">${active().length === 2 ? 'Both parents are linked.' : 'One parent has set this up; the other has not joined yet.'}</span></div>
+        <div><span class="eyebrow">You</span><span class="big">${E(me.name)}</span><span class="small muted">${E(VLABEL[me.label] || me.label)}${me.for_role ? ` for ${E(roleName(me.for_role))}` : ''} · read-only · ${E(A.me.user.email)}</span></div>
+      </div>
+      <div class="notice">You see the calendar the parents share, every proposal and the record. You can open Settings and Setup and try changes; they stay on this device as a what-if and never reach the parents. Either parent can end this access.</div>
+      ${open.length ? `<div class="panel"><div class="row" style="justify-content:space-between"><h3>Open proposals</h3><span class="pill w">${open.length}</span></div><div class="list">${open.map((p) => propItem(p, false)).join('')}</div></div>` : '<div class="panel"><h3>Open proposals</h3><p class="small muted">None.</p></div>'}
+      <div class="grid2">
+        <div class="panel"><h3>Calendar address for your calendar app</h3><p class="small muted">A private address for you alone; it updates when the parents approve a change and stops working when your access ends.</p><input class="mono small" readonly id="feedUrl" value="${E(location.origin)}/api/cc/feed/${E(me.feed)}.ics" style="width:100%;font:inherit;font-family:var(--mono);font-size:12px;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink)"><div class="row" style="margin-top:8px"><button class="btn sm" data-acct="copyFeed">Copy address</button><button class="btn sm quiet" data-acct="rotate">Make a new address</button></div></div>
+        <div class="panel"><h3>Record</h3><p class="small muted">Every change, who asked, who decided, and when.</p><div class="row"><button class="btn sm" data-acct="view" data-arg="record">See the record</button><button class="btn sm" data-go="cal">Open the calendar</button><button class="btn sm quiet" data-acct="signout">Sign out</button></div></div>
+      </div>
+      ${recent.length ? `<div class="panel"><h3>Recently decided</h3><div class="list">${recent.map((p) => propItem(p, false)).join('')}</div></div>` : ''}
+    </div>`;
+  }
+  function viewersPanel() {
+    const vs = (A.me.viewers || []).filter((v) => v.status !== 'revoked'); const gone = (A.me.viewers || []).filter((v) => v.status === 'revoked');
+    const row = (v) => `<div class="item"><span class="pill${v.status === 'active' ? ' ok' : v.status === 'invited' ? ' w' : ''}">${E(v.status === 'invited' ? 'invited' : v.status)}</span><div><b>${E(viewerText(v))}</b><div class="res">${v.status === 'invited' ? `Code to give them: <span class="code" style="font-size:15px;padding:2px 8px">${E(v.code)}</span> <button class="btn sm" data-acct="copyText" data-arg="${E(v.code)}">Copy</button>` : v.status === 'active' ? `Signed in${v.email ? ` as ${E(v.email)}` : ''} ${v.activated ? fDT(parseDateTime(v.activated)) : ''}` : `Ended ${v.revoked_at ? fDT(parseDateTime(v.revoked_at)) : ''}`}</div></div>${v.status !== 'revoked' ? `<button class="btn sm danger" data-acct="revokeViewer" data-arg="${v.id}">${v.status === 'invited' ? 'Withdraw' : 'End access'}</button>` : '<span></span>'}</div>`;
+    return `<div class="panel" style="margin-top:12px"><h3>Third-party viewers</h3><p class="small muted">An attorney, mediator or guardian ad litem can see the calendar, every proposal and the record, and gets a calendar address of their own. They cannot change anything; what they try in Settings stays on their own device. Either parent can invite or end access; the other parent is told each time, and the record keeps it.</p>
+      ${vs.length ? `<div class="list">${vs.map(row).join('')}</div>` : '<p class="small muted">No viewers.</p>'}
+      <form class="form tight" data-acct-form="viewer" style="margin-top:10px"><div class="field"><span class="lbl">Name</span><input name="name" required placeholder="Jane Doe"></div><div class="field"><span class="lbl">Who they are</span><select name="label"><option value="attorney">Attorney</option><option value="mediator">Mediator</option><option value="gal">Guardian ad litem</option><option value="other">Other</option></select></div><div class="field"><span class="lbl">For</span><select name="for_role"><option value="">both parents / neutral</option><option value="M">${E(roleName('M'))}</option><option value="F">${E(roleName('F'))}</option></select></div><div class="field"><span class="lbl">&nbsp;</span><button class="btn primary" type="submit">Invite</button></div></form>
+      <p class="small muted">Inviting makes a code. Give it to them; they sign in at ${E(location.origin)} with their own email and enter the code.</p>
+      ${gone.length ? `<details class="help"><summary>Ended (${gone.length})</summary><div class="list">${gone.map(row).join('')}</div></details>` : ''}</div>`;
+  }
   function linkHtml() {
     const o = other(); const code = A.me.family.code;
     return `<div class="acct"><div class="card"><span class="eyebrow">Linked parent</span><h2>${o ? `Linked with ${E(roleName(o.role))}` : 'Link the other parent'}</h2>
@@ -263,17 +303,27 @@ const ACC = (() => {
         <div class="step"><span class="n">2</span><div><b>They sign in with their own email and enter the code</b><div class="small muted">At ${E(location.origin)}, under Sign in. They become ${E(roleName(A.me.me.role === 'M' ? 'F' : 'M'))}.</div></div></div>
         <div class="step"><span class="n">3</span><div><b>They confirm the schedule as it stands</b><div class="small muted">It stays in force before and after. From then on, changes need the other parent's approval.</div></div></div></div>
         <div class="panel" style="margin-top:12px"><h3>Until the other parent joins</h3><p class="small muted">Your changes apply right away and are marked "not yet confirmed by the other parent". When they join and confirm, the marks clear; the record keeps each change.</p></div>`}
+      ${viewersPanel()}
       <div class="row" style="margin-top:12px"><button class="btn" data-acct="view" data-arg="dash">Back to the dashboard</button><button class="btn quiet danger" data-acct="leave">Unlink me from this calendar</button></div>
       <p class="small muted">Unlinking keeps the calendar in this browser as it is now; the shared record stays with the other parent.</p></div></div>`;
   }
   function recordHtml() {
-    const rows = A.me.events.map((ev) => { const m = A.me.members.find((x) => x.id === ev.actor); return `<tr><td class="mono small">${E(fDT(parseDateTime(ev.at)))}</td><td>${E(ev.action)}</td><td>${E(ev.detail)}</td><td>${m ? E(roleName(m.role)) : ''}</td></tr>`; }).join('');
+    const rows = A.me.events.map((ev) => { const m = A.me.members.find((x) => x.id === ev.actor); return `<tr><td class="mono small">${E(fDT(parseDateTime(ev.at)))}</td><td>${E(ev.action)}</td><td>${E(ev.detail)}</td><td>${m ? E(roleName(m.role)) + (m.left ? ' (left)' : '') : ''}</td></tr>`; }).join('');
     return `<div class="acct"><div class="card"><div class="row" style="justify-content:space-between"><div><span class="eyebrow">Record</span><h2>Every change to the calendar</h2><p class="muted">Who asked, who decided, and when. Nothing here can be edited or removed. Version numbers count approved changes to the shared settings.</p></div><button class="btn" data-acct="view" data-arg="dash">Back to the dashboard</button></div>
       <div class="tblbox"><table class="tbl"><thead><tr><th>When</th><th>What</th><th>Detail</th><th>By</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">Nothing yet.</td></tr>'}</tbody></table></div>
       <div class="row" style="margin-top:10px"><button class="btn sm" data-acct="copyRecord">Copy as text</button></div></div></div>`;
   }
   function parseDateTime(s) { const d = new Date(String(s).replace(' ', 'T')); return utc(d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours()) + d.getMinutes() * 60000; }
 
+  // ---------- published calendar address (works without an account) ----------
+  function pubInfo() { return lsGet('cc_pub'); }
+  async function publish() {
+    const prev = pubInfo() || {};
+    const s = clone(STATE); s.setupDone = true;
+    const d = await api('POST', '/api/cc/publish', { settings: s, id: prev.id, secret: prev.secret });
+    lsSet('cc_pub', { id: d.id, secret: d.secret, version: d.version, at: new Date().toISOString() });
+    return d;
+  }
   // ---------- events from the page ----------
   async function run(fn) { if (A.busy) return; A.busy = true; try { await fn(); } catch (e) { A.err = e.message || String(e); } A.busy = false; render(); if (UI.place !== 'acct') rerender(); else { rebuild(); } updateTab(); }
   function action(act, arg, btn) {
@@ -293,6 +343,8 @@ const ACC = (() => {
       case 'leave': if (btn && btn.dataset.sure !== '1') { btn.dataset.sure = '1'; btn.textContent = 'Tap again to unlink'; return; } run(() => leave()); return;
       case 'copyFeed': copy(document.getElementById('feedUrl').value, 'Calendar address copied.'); return;
       case 'copyCode': copy(A.me.family.code, 'Code copied.'); return;
+      case 'copyText': copy(arg, 'Copied.'); return;
+      case 'revokeViewer': if (btn && btn.dataset.sure !== '1') { btn.dataset.sure = '1'; btn.textContent = 'Tap again to confirm'; return; } run(async () => { const d = await api('POST', `/api/cc/viewers/${arg}/revoke`, {}); A.me = Object.assign({ user: A.me.user }, d); A.msg = 'Access ended. The other parent is told, and the record keeps it.'; }); return;
       case 'copyRecord': copy(A.me.events.slice().reverse().map((ev) => `${ev.at.slice(0, 16)}  ${ev.action}  ${ev.detail}`).join('\n'), 'Record copied.'); return;
     }
   }
@@ -305,8 +357,9 @@ const ACC = (() => {
     else if (kind === 'join') run(() => join(data.code));
     else if (kind === 'send') run(() => sendDraft(data.note));
     else if (kind === 'decline') run(() => decide(f.dataset.id, 'decline', data.note));
+    else if (kind === 'viewer') run(async () => { const d = await api('POST', '/api/cc/viewers', { name: data.name, label: data.label, for_role: data.for_role }); A.me = Object.assign({ user: A.me.user }, d); A.view = 'link'; A.msg = `Invitation made for ${data.name}. Give them the code shown under Third-party viewers.`; });
   }
   document.addEventListener('submit', (e) => { const f = e.target.closest('form[data-acct-form]'); if (!f) return; e.preventDefault(); form(f); });
 
-  return { A, init, render, banner, action, inFamily, isDirty, alone, otherName, needsMe, updateTab, propDays: () => A.propDays, signedIn: () => !!A.auth };
+  return { A, init, render, banner, action, publish, pubInfo, inFamily, isViewer, isDirty, alone, otherName, needsMe, updateTab, propDays: () => A.propDays, signedIn: () => !!A.auth };
 })();
