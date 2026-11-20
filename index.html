@@ -364,7 +364,7 @@ function planDefaults(){
     holidays, customs:[],
     vacations:{allow:{M:14,F:14},notice:30,maxLen:14,list:[]},
     changes:[], xrules:[],
-    cal:{start:startYm,years:3,limit:21,mode:'cap',makeup:'none'}};
+    cal:{start:startYm,years:3,limit:21,mode:'cap',makeup:'none',makeupVac:false}};
 }
 function migrateOld(){
   try{ const s=JSON.parse(localStorage.getItem('cc4')||'null'); if(!s||!Array.isArray(s.items))return null;
@@ -388,7 +388,7 @@ function loadState(){
   const m=migrateOld(); if(m){STATE=m; UI.note='Your earlier settings were carried over.'; saveState(); return;}
   STATE=planDefaults();
 }
-function upgradeState(s){ if(!s.cal.makeup)s.cal.makeup='none'; if(!Array.isArray(s.xrules))s.xrules=[]; for(const k of ['M','F']){ if(!s.parents[k].role)s.parents[k].role=k==='M'?'mother':'father'; } if(s.phase.ldEnd==null)s.phase.ldEnd=''; if(!s.phase.weeksPerCycle)s.phase.weeksPerCycle=2; for(const [id,h] of Object.entries(s.holidays)){ if(!h.applies){ const c=CAT.find(x=>x.id===id); h.applies=c&&c.sameCity?'local':'both'; } } return s; }
+function upgradeState(s){ if(!s.cal.makeup)s.cal.makeup='none'; if(s.cal.makeupVac==null)s.cal.makeupVac=false; if(!Array.isArray(s.xrules))s.xrules=[]; for(const k of ['M','F']){ if(!s.parents[k].role)s.parents[k].role=k==='M'?'mother':'father'; } if(s.phase.ldEnd==null)s.phase.ldEnd=''; if(!s.phase.weeksPerCycle)s.phase.weeksPerCycle=2; for(const [id,h] of Object.entries(s.holidays)){ if(!h.applies){ const c=CAT.find(x=>x.id===id); h.applies=c&&c.sameCity?'local':'both'; } } return s; }
 function saveState(){ try{localStorage.setItem('cc5',JSON.stringify(STATE));}catch(e){} }
 function shareLink(){ const s=btoa(unescape(encodeURIComponent(JSON.stringify(STATE)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); return location.origin+location.pathname+'#s='+s; }
 
@@ -561,7 +561,7 @@ const SECTIONS=[
  {id:'hol',t:'Holidays and birthdays',s:()=>`${Object.values(STATE.holidays).filter(h=>h.on).length} holidays selected`},
  {id:'vac',t:'Vacations',s:()=>`${STATE.vacations.allow.M} / ${STATE.vacations.allow.F} days a year · ${STATE.vacations.list.length} planned`},
  {id:'changes',t:'One-time changes',s:()=>`${STATE.changes.length} change${STATE.changes.length===1?'':'s'}`},
- {id:'limits',t:'Limits and range',s:()=>`${STATE.cal.limit} days${STATE.cal.makeup==='shift'?' · lost days added back, cycle shifts':STATE.cal.makeup==='fixed'?' · lost days added to the block':''} · from ${usdStr(STATE.cal.start)} for ${STATE.cal.years} year${STATE.cal.years>1?'s':''}`},
+ {id:'limits',t:'Limits and range',s:()=>`${STATE.cal.limit} days${STATE.cal.makeup==='shift'?' · lost days added back, cycle shifts':STATE.cal.makeup==='fixed'?' · lost days added to the block':''}${STATE.cal.makeup!=='none'&&STATE.cal.makeupVac?', vacations too':''} · from ${usdStr(STATE.cal.start)} for ${STATE.cal.years} year${STATE.cal.years>1?'s':''}`},
  {id:'share',t:'Share and export',s:()=>'Link, .ics, .csv, print'},
 ];
 function renderSet(){ renderNav(); renderEdit(); const bn=$('setBanner'); bn.innerHTML=(ERR?`<div class="banner err">${esc(ERR)}</div>`:'')+ACC.banner(); }
@@ -640,8 +640,8 @@ function secHtml(id){
     <div class="form">${fld('Longest time away from either parent (days)',inp('cal.limit',{type:'number',num:true,min:1,max:365}))}${fld('If a holiday pushes past the limit',sel('cal.mode',[['cap','Give the other parent the extra days next to the holiday'],['none','Only mark it on the calendar']]))}${fld('Calendar starts on',inp('cal.start',{type:'date'}))}${fld('Years to cover',inp('cal.years',{type:'number',num:true,min:1,max:10}))}</div>
     <p class="help">The extra days come from the regular time next to the holiday: from the end of the stretch where it meets the other parent's next block; if the stretch ends with a holiday, from its start. The rule applies under the long distance schedule only.</p>
     <h3>Lost days</h3>
-    <div class="form">${fld("When a holiday or birthday takes days from a parent's block",sel('cal.makeup',[['none','The block simply loses them'],['fixed',"The lost days are added to the end of that parent's block: the cycle dates stay fixed"],['shift','The lost days are added back: the whole cycle shifts later']]))}</div>
-    <p class="help">With "added to the end of that parent's block", the days a holiday or birthday takes from the parent whose block it falls in are owed to that parent and come back at the end of that block, taken from the start of the other parent's next block, rounded to whole days. The cycle dates do not move. Days lost by both parents in the same cycle offset each other, and the day limit rule does not take make-up days. With "the whole cycle shifts later", the block clock pauses instead, so every later exchange moves by the days lost. Vacations, one-time changes and custom periods never count; the local schedule is never changed.${r&&r.shiftDays?` In this calendar the cycle shifts ${r.shiftDays} day${r.shiftDays===1?'':'s'} in total.`:''}${r&&r.madeDays?` In this calendar ${fmt1(r.madeDays)} day${r.madeDays===1?' is':'s are'} made up${r.owedDays?`; ${fmt1(r.owedDays)} still owed at the end of the range`:''}.`:''}</p>
+    <div class="form">${fld("When a holiday or birthday takes days from a parent's block",sel('cal.makeup',[['none','The block simply loses them'],['fixed',"The lost days are added to the end of that parent's block: the cycle dates stay fixed"],['shift','The lost days are added back: the whole cycle shifts later']]))}${S.cal.makeup!=='none'?chk('cal.makeupVac','Vacations count too: days a vacation takes from the other parent\'s block are made up the same way'):''}</div>
+    <p class="help">With "added to the end of that parent's block", the days a holiday or birthday takes from the parent whose block it falls in are owed to that parent and come back at the end of that block, taken from the start of the other parent's next block, rounded to whole days. The cycle dates do not move. Days lost by both parents in the same cycle offset each other, and the day limit rule does not take make-up days. With "the whole cycle shifts later", the block clock pauses instead, so every later exchange moves by the days lost. Vacations count only when "Vacations count too" is ticked; one-time changes and custom periods never count; the local schedule is never changed.${r&&r.shiftDays?` In this calendar the cycle shifts ${r.shiftDays} day${r.shiftDays===1?'':'s'} in total.`:''}${r&&r.madeDays?` In this calendar ${fmt1(r.madeDays)} day${r.madeDays===1?' is':'s are'} made up${r.owedDays?`; ${fmt1(r.owedDays)} still owed at the end of the range`:''}.`:''}</p>
     ${r?`    ${r.over.length?`<div class="notice warn"><b>${r.over.length} stretch${r.over.length>1?'es':''} over ${S.cal.limit} days:</b><br>${r.over.map(sg=>`${fDT(sg.s)} to ${fDT(sg.e)}: ${fmt1(sg.h/24)} days with ${esc(PN(sg.p))}`).join('<br>')}</div>`:`<div class="notice">Nothing goes over ${S.cal.limit} days in the range.</div>`}`:''}`; }
   case 'share': return `<div class="head"><div><h2>Share and export</h2><p class="muted">${ACC.isViewer()?'You view this calendar read-only. Your dashboard has a shared calendar URL; the link below carries a copy of the settings as they are now.':ACC.inFamily()?`This calendar is shared with ${esc(ACC.otherName())} through your account; the dashboard has the shared calendar URL. The link below carries a copy only.`:'Settings stay in this browser. A link carries them to any other phone or computer. To share one live calendar with the other parent, sign in (Sign in tab).'}</p></div></div>
     <div class="list">
@@ -673,7 +673,7 @@ function reviewHtml(){ const S=STATE; const hol=Object.entries(S.holidays).filte
    <dt><a href="#" data-step="2">In force</a></dt><dd>${esc(phaseText())}</dd>
    <dt><a href="#" data-step="4">Holidays</a></dt><dd>${hol.length} selected: ${esc(hol.join(', '))}</dd>
    <dt><a href="#" data-step="5">Vacations</a></dt><dd>${S.vacations.allow.M} and ${S.vacations.allow.F} days a year, ${S.vacations.notice} days notice, ${S.vacations.list.length} planned</dd>
-   <dt><a href="#" data-step="6">Limit</a></dt><dd>${S.cal.limit} days; ${S.cal.mode==='cap'?'extra days go to the other parent':'only marked'}; ${S.cal.makeup==='shift'?'lost holiday days added back, cycle shifts':S.cal.makeup==='fixed'?'lost holiday days added to the end of the block, cycle dates fixed':'lost holiday days not made up'}; calendar from ${esc(usdStr(S.cal.start))} for ${S.cal.years} years</dd>
+   <dt><a href="#" data-step="6">Limit</a></dt><dd>${S.cal.limit} days; ${S.cal.mode==='cap'?'extra days go to the other parent':'only marked'}; ${S.cal.makeup==='shift'?'lost holiday days added back, cycle shifts':S.cal.makeup==='fixed'?'lost holiday days added to the end of the block, cycle dates fixed':'lost holiday days not made up'}${S.cal.makeup!=='none'&&S.cal.makeupVac?' (vacations too)':''}; calendar from ${esc(usdStr(S.cal.start))} for ${S.cal.years} years</dd>
   </dl></div>
   ${ERR?`<div class="notice warn">${esc(ERR)}</div>`:stripHtml()}
   <div class="notice">Your settings stay in this browser. Under Settings, Share and export, a link opens the same calendar on any other phone.</div>`; }
