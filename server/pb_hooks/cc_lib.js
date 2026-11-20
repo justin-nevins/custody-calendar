@@ -30,6 +30,21 @@ function memberOf(app, userId) {
   return rows.length ? rows[0] : null;
 }
 
+// The active viewer row (attorney, mediator) for a user, or null.
+function viewerOf(app, userId) {
+  const rows = app.findRecordsByFilter("viewers", "user = {:u} && status = 'active'", "-created", 1, 0, { u: userId });
+  return rows.length ? rows[0] : null;
+}
+// Routes that change the shared calendar need a parent; a viewer gets a plain refusal, anyone else the usual one.
+function requireParent(app, userId) {
+  const me = memberOf(app, userId);
+  if (me) return me;
+  if (viewerOf(app, userId)) bad("This account has read-only access. A parent has to make this change.");
+  bad("You are not part of a shared calendar.");
+}
+function isViewer(rec) { return !!rec && rec.collection().name === "viewers"; }
+const LABELS = { attorney: "attorney", mediator: "mediator", gal: "guardian ad litem", other: "third party" };
+function viewerText(settings, v) { const who = v.getString("for_role"); return `${v.getString("name")} (${LABELS[v.getString("label")] || v.getString("label")}${who ? ` for ${parentName(settings, who)}` : ""})`; }
 function membersOf(app, familyId) {
   return app.findRecordsByFilter("members", "family = {:f}", "created", 10, 0, { f: familyId });
 }
@@ -78,21 +93,24 @@ function sendMail(to, subject, text) {
 }
 
 function familyView(app, fam, me) {
-  const members = membersOf(app, fam.id).map((m) => ({ id: m.id, role: m.getString("role"), confirmed: m.getBool("confirmed"), email: userEmail(app, m.getString("user")), me: m.id === me.id, feed: m.id === me.id ? m.getString("feed_token") : undefined }));
+  const viewer = isViewer(me);
+  const members = membersOf(app, fam.id).map((m) => ({ id: m.id, role: m.getString("role"), confirmed: m.getBool("confirmed"), email: viewer ? undefined : userEmail(app, m.getString("user")), me: !viewer && m.id === me.id }));
+  const settings = jget(fam, "settings");
+  const viewers = app.findRecordsByFilter("viewers", "family = {:f}", "created", 50, 0, { f: fam.id }).map((v) => ({ id: v.id, label: v.getString("label"), name: v.getString("name"), for_role: v.getString("for_role"), status: v.getString("status"), invited_by: v.getString("invited_by"), code: !viewer && v.getString("status") === "invited" ? v.getString("code") : undefined, email: v.getString("user") && !viewer ? userEmail(app, v.getString("user")) : undefined, created: v.getString("created"), activated: v.getString("activated"), revoked_at: v.getString("revoked_at"), me: viewer && v.id === me.id }));
   const proposals = app.findRecordsByFilter("proposals", "family = {:f}", "-created", 200, 0, { f: fam.id }).map((p) => ({
     id: p.id, kind: p.getString("kind"), payload: jget(p, "payload"), summary: p.getString("summary"), note: p.getString("note"), proposed_by: p.getString("proposed_by"),
     status: p.getString("status"), unconfirmed: p.getBool("unconfirmed"), decided_by: p.getString("decided_by"), decided_note: p.getString("decided_note"), decided_at: p.getString("decided_at"), created: p.getString("created"),
   }));
   const events = app.findRecordsByFilter("events", "family = {:f}", "-at", 300, 0, { f: fam.id }).map((ev) => ({ id: ev.id, at: ev.getString("at"), actor: ev.getString("actor"), action: ev.getString("action"), detail: ev.getString("detail"), proposal: ev.getString("proposal"), version: ev.get("version") }));
-  return { family: { id: fam.id, code: fam.getString("code"), settings: jget(fam, "settings"), version: fam.get("version"), updated: fam.getString("updated") }, me: { id: me.id, role: me.getString("role"), confirmed: me.getBool("confirmed"), feed: me.getString("feed_token") }, members, proposals, events };
+  const meOut = viewer ? { viewer: true, id: me.id, label: me.getString("label"), name: me.getString("name"), for_role: me.getString("for_role"), feed: me.getString("feed_token") } : { id: me.id, role: me.getString("role"), confirmed: me.getBool("confirmed"), feed: me.getString("feed_token") };
+  return { readonly: viewer, family: { id: fam.id, code: viewer ? undefined : fam.getString("code"), settings, version: fam.get("version"), updated: fam.getString("updated") }, me: meOut, members, viewers, proposals, events };
 }
 
 
 // approve, decline or withdraw an open proposal
 // ---- approve, decline, withdraw ----
 function decide(e, action) {
-  const me = memberOf($app, e.auth.id);
-  if (!me) bad("You are not part of a shared calendar.");
+  const me = requireParent($app, e.auth.id);
   const id = e.request.pathValue("id");
   let p = null;
   try { p = $app.findRecordById("proposals", id); } catch (_) { bad("That proposal no longer exists."); }
@@ -133,4 +151,4 @@ function decide(e, action) {
   return e.json(200, out);
 }
 
-module.exports = { decide, jget, CODE_ALPHABET, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, clone, applyProposal, addEvent, sendMail, familyView };
+module.exports = { decide, viewerOf, requireParent, isViewer, viewerText, LABELS, jget, CODE_ALPHABET, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, clone, applyProposal, addEvent, sendMail, familyView };

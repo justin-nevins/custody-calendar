@@ -5,7 +5,7 @@
 
 // ---- sign in: make sure the account exists, then the client asks PocketBase for the one-time code ----
 routerAdd("POST", "/api/cc/signin", (e) => {
-  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView } = require(`${__hooks}/cc_lib.js`);
+  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView, viewerOf, requireParent, viewerText } = require(`${__hooks}/cc_lib.js`);
   const email = String(body(e).email || "").trim().toLowerCase();
   if (!emailOk(email)) bad("Enter a valid email address.");
   let user = null;
@@ -22,8 +22,8 @@ routerAdd("POST", "/api/cc/signin", (e) => {
 
 // ---- who am I, which family, what is open ----
 routerAdd("GET", "/api/cc/me", (e) => {
-  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView } = require(`${__hooks}/cc_lib.js`);
-    const me = memberOf($app, e.auth.id);
+  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView, viewerOf, requireParent, viewerText } = require(`${__hooks}/cc_lib.js`);
+  const me = memberOf($app, e.auth.id) || viewerOf($app, e.auth.id);
   if (!me) return e.json(200, { user: { id: e.auth.id, email: e.auth.email() }, family: null });
   const fam = $app.findRecordById("families", me.getString("family"));
   return e.json(200, Object.assign({ user: { id: e.auth.id, email: e.auth.email() } }, familyView($app, fam, me)));
@@ -31,7 +31,7 @@ routerAdd("GET", "/api/cc/me", (e) => {
 
 // ---- start a shared calendar from the settings in this browser ----
 routerAdd("POST", "/api/cc/families", (e) => {
-  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView } = require(`${__hooks}/cc_lib.js`);
+  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView, viewerOf, requireParent, viewerText } = require(`${__hooks}/cc_lib.js`);
     const b = body(e);
   const role = b.role === "F" ? "F" : b.role === "M" ? "M" : bad("Say which parent you are.");
   const settings = b.settings;
@@ -60,12 +60,33 @@ routerAdd("POST", "/api/cc/families", (e) => {
 
 // ---- join with the other parent's code ----
 routerAdd("POST", "/api/cc/join", (e) => {
-  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView } = require(`${__hooks}/cc_lib.js`);
+  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView, viewerOf, requireParent, viewerText } = require(`${__hooks}/cc_lib.js`);
     const code = String(body(e).code || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (code.length !== 8) bad("A code has 8 letters and digits.");
   const formatted = code.slice(0, 4) + "-" + code.slice(4);
   let fam = null;
-  try { fam = $app.findFirstRecordByData("families", "code", formatted); } catch (_) { bad("No calendar has that code. Check it with the other parent."); }
+  try { fam = $app.findFirstRecordByData("families", "code", formatted); } catch (_) {}
+  if (!fam) {
+    // not a parent code: a viewer invitation?
+    let inv = null;
+    try { inv = $app.findFirstRecordByData("viewers", "code", formatted); } catch (_) { bad("No calendar has that code. Check it with the person who gave it to you."); }
+    if (inv.getString("status") !== "invited") bad(inv.getString("status") === "active" ? "That invitation was already used." : "That invitation was withdrawn by a parent.");
+    if (memberOf($app, e.auth.id)) bad("This account is a parent on a shared calendar. A viewer uses a different email address.");
+    if (viewerOf($app, e.auth.id)) bad("This account already views a calendar. Use a different email address for another one.");
+    const f0 = $app.findRecordById("families", inv.getString("family"));
+    let out = null;
+    $app.runInTransaction((tx) => {
+      const v = tx.findRecordById("viewers", inv.id);
+      v.set("user", e.auth.id); v.set("status", "active"); v.set("activated", new Date().toISOString()); tx.save(v);
+      const f = tx.findRecordById("families", f0.id);
+      const us = (f.get("users") || []).filter((u) => u !== e.auth.id); us.push(e.auth.id); f.set("users", us); tx.save(f);
+      addEvent(tx, f.id, inv.getString("invited_by"), "viewer joined", `${viewerText(jget(f, "settings"), v)} signed in and can now view the calendar and the record (${e.auth.email()})`, null, f.get("version"));
+      out = familyView(tx, f, v);
+    });
+    for (const m of membersOf($app, f0.id)) sendMail(userEmail($app, m.getString("user")), "A viewer joined your Custody Calendar", `${viewerText(jget(f0, "settings"), inv)} signed in with ${e.auth.email()} and can now view the calendar, proposals and record. Either parent can end that access from the Linked parent page.`);
+    return e.json(200, out);
+  }
+  if (viewerOf($app, e.auth.id)) bad("This account views a calendar as a third party. A parent uses a different email address.");
   const existing = memberOf($app, e.auth.id);
   if (existing && existing.getString("family") === fam.id) return e.json(200, familyView($app, fam, existing));
   if (existing) bad("This account is already part of another shared calendar.");
@@ -89,9 +110,8 @@ routerAdd("POST", "/api/cc/join", (e) => {
 
 // ---- the joining parent confirms the schedule as it stands (it stays in force either way) ----
 routerAdd("POST", "/api/cc/confirm", (e) => {
-  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView } = require(`${__hooks}/cc_lib.js`);
-    const me = memberOf($app, e.auth.id);
-  if (!me) bad("You are not part of a shared calendar.");
+  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView, viewerOf, requireParent, viewerText } = require(`${__hooks}/cc_lib.js`);
+    const me = requireParent($app, e.auth.id);
   if (me.getBool("confirmed")) return e.json(200, familyView($app, $app.findRecordById("families", me.getString("family")), me));
   let out = null;
   $app.runInTransaction((tx) => {
@@ -110,9 +130,8 @@ routerAdd("POST", "/api/cc/confirm", (e) => {
 
 // ---- propose a change ----
 routerAdd("POST", "/api/cc/proposals", (e) => {
-  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView } = require(`${__hooks}/cc_lib.js`);
-    const me = memberOf($app, e.auth.id);
-  if (!me) bad("You are not part of a shared calendar.");
+  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView, viewerOf, requireParent, viewerText } = require(`${__hooks}/cc_lib.js`);
+    const me = requireParent($app, e.auth.id);
   const b = body(e);
   const kind = String(b.kind || "");
   if (!["settings", "change", "vacation", "remove"].includes(kind)) bad("Unknown proposal kind.");
@@ -156,11 +175,13 @@ routerAdd("POST", "/api/cc/proposals/{id}/withdraw", (e) => require(`${__hooks}/
 
 // ---- calendar feed: a private address per parent; approved calendar only ----
 routerAdd("GET", "/api/cc/feed/{token}", (e) => {
-  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView } = require(`${__hooks}/cc_lib.js`);
+  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView, viewerOf, requireParent, viewerText } = require(`${__hooks}/cc_lib.js`);
     const token = String(e.request.pathValue("token") || "").replace(/\.ics$/, "");
   if (token.length < 32) throw new NotFoundError("No calendar at this address.");
   let m = null;
-  try { m = $app.findFirstRecordByData("members", "feed_token", token); } catch (_) { throw new NotFoundError("No calendar at this address."); }
+  try { m = $app.findFirstRecordByData("members", "feed_token", token); } catch (_) {}
+  if (!m) { try { const v = $app.findFirstRecordByData("viewers", "feed_token", token); if (v.getString("status") === "active") m = v; } catch (_) {} }
+  if (!m) throw new NotFoundError("No calendar at this address.");
   const fam = $app.findRecordById("families", m.getString("family"));
   const s = jget(fam, "settings");
   const E = engine();
@@ -173,19 +194,102 @@ routerAdd("GET", "/api/cc/feed/{token}", (e) => {
 });
 
 routerAdd("POST", "/api/cc/feed/rotate", (e) => {
-  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView } = require(`${__hooks}/cc_lib.js`);
-    const me = memberOf($app, e.auth.id);
+  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView, viewerOf, requireParent, viewerText } = require(`${__hooks}/cc_lib.js`);
+    const me = memberOf($app, e.auth.id) || viewerOf($app, e.auth.id);
   if (!me) bad("You are not part of a shared calendar.");
   me.set("feed_token", $security.randomString(40)); $app.save(me);
-  addEvent($app, me.getString("family"), me.id, "feed address changed", "A new private calendar address was made; the old one stopped working", null, null);
+  const who = me.collection().name === "viewers" ? viewerText(jget($app.findRecordById("families", me.getString("family")), "settings"), me) : null;
+  addEvent($app, me.getString("family"), who ? null : me.id, "feed address changed", (who ? who + ": a" : "A") + " new private calendar address was made; the old one stopped working", null, null);
   return e.json(200, { feed: me.getString("feed_token") });
+}, $apis.requireAuth("users"));
+
+// ---- published calendars (no account): a calendar-app address for the settings in a browser ----
+routerAdd("POST", "/api/cc/publish", (e) => {
+  const { jget, engine, bad, body } = require(`${__hooks}/cc_lib.js`);
+  const b = body(e);
+  const settings = b.settings;
+  if (!settings || typeof settings !== "object" || settings.v !== 5) bad("The settings are missing or from an older version of the page.");
+  try { engine().build(settings); } catch (err) { bad("The calendar cannot be built from these settings: " + (err && err.message ? err.message : err)); }
+  let rec = null;
+  if (b.id && b.secret) {
+    try { const r = $app.findRecordById("published", String(b.id)); if ($security.equal(r.getString("secret"), String(b.secret))) rec = r; } catch (_) {}
+  }
+  if (rec) { rec.set("settings", settings); rec.set("version", (rec.get("version") || 1) + 1); $app.save(rec); }
+  else { rec = new Record($app.findCollectionByNameOrId("published")); rec.set("settings", settings); rec.set("secret", $security.randomString(40)); rec.set("version", 1); $app.save(rec); }
+  return e.json(200, { id: rec.id, secret: rec.getString("secret"), version: rec.get("version"), url: $app.settings().meta.appURL + "/api/cc/cal/" + rec.id + ".ics" });
+});
+
+routerAdd("GET", "/api/cc/cal/{id}", (e) => {
+  const { jget, engine, parentName } = require(`${__hooks}/cc_lib.js`);
+  const id = String(e.request.pathValue("id") || "").replace(/\.ics$/, "");
+  let rec = null;
+  try { rec = $app.findRecordById("published", id); } catch (_) { throw new NotFoundError("No calendar at this address."); }
+  const s = jget(rec, "settings");
+  const E = engine();
+  const { result } = E.build(s);
+  const text = E.icsText(result, { M: parentName(s, "M"), F: parentName(s, "F") }, { name: "Custody Calendar", refresh: "PT6H" });
+  e.response.header().set("Content-Type", "text/calendar; charset=utf-8");
+  e.response.header().set("Cache-Control", "no-store");
+  e.response.header().set("Content-Disposition", 'inline; filename="custody-calendar.ics"');
+  return e.string(200, text);
+});
+
+// ---- third-party viewers: invite, revoke ----
+routerAdd("POST", "/api/cc/viewers", (e) => {
+  const { jget, bad, body, newCode, parentName, requireParent, membersOf, otherMember, userEmail, addEvent, sendMail, familyView, viewerText } = require(`${__hooks}/cc_lib.js`);
+  const me = requireParent($app, e.auth.id);
+  const b = body(e);
+  const label = ["attorney", "mediator", "gal", "other"].includes(b.label) ? b.label : bad("Say what kind of viewer this is.");
+  const name = String(b.name || "").trim().slice(0, 120); if (!name) bad("Enter the viewer's name.");
+  const forRole = b.for_role === "M" || b.for_role === "F" ? b.for_role : "";
+  const fam = $app.findRecordById("families", me.getString("family"));
+  const open = $app.findRecordsByFilter("viewers", "family = {:f} && status != 'revoked'", "created", 50, 0, { f: fam.id });
+  if (open.length >= 10) bad("Ten viewers is the most one calendar can have; revoke one first.");
+  let out = null;
+  $app.runInTransaction((tx) => {
+    const v = new Record(tx.findCollectionByNameOrId("viewers"));
+    let code = newCode();
+    for (let i = 0; i < 5; i++) { try { tx.findFirstRecordByData("viewers", "code", code); code = newCode(); } catch (_) { break; } }
+    v.set("family", fam.id); v.set("label", label); v.set("name", name); if (forRole) v.set("for_role", forRole);
+    v.set("invited_by", me.id); v.set("code", code); v.set("status", "invited"); v.set("feed_token", $security.randomString(40));
+    tx.save(v);
+    addEvent(tx, fam.id, me.id, "viewer invited", `${parentName(jget(fam, "settings"), me.getString("role"))} invited ${viewerText(jget(fam, "settings"), v)} to view the calendar and the record`, null, fam.get("version"));
+    out = familyView(tx, fam, me); out.viewer_id = v.id;
+  });
+  const other = otherMember($app, fam.id, me.id);
+  if (other) sendMail(userEmail($app, other.getString("user")), "A viewer was invited to your Custody Calendar", `${parentName(jget(fam, "settings"), me.getString("role"))} invited ${name} (${label}) to view the calendar, proposals and record. Viewers cannot change anything. Either parent can end the access from the Linked parent page.`);
+  return e.json(200, out);
+}, $apis.requireAuth("users"));
+
+routerAdd("POST", "/api/cc/viewers/{id}/revoke", (e) => {
+  const { jget, bad, parentName, requireParent, membersOf, otherMember, userEmail, addEvent, sendMail, familyView, viewerText } = require(`${__hooks}/cc_lib.js`);
+  const me = requireParent($app, e.auth.id);
+  let v = null;
+  try { v = $app.findRecordById("viewers", e.request.pathValue("id")); } catch (_) { bad("That viewer no longer exists."); }
+  if (v.getString("family") !== me.getString("family")) bad("That viewer is not on your calendar.");
+  if (v.getString("status") === "revoked") bad("That access was already ended.");
+  const fam = $app.findRecordById("families", v.getString("family"));
+  const s = jget(fam, "settings");
+  let out = null;
+  $app.runInTransaction((tx) => {
+    const vv = tx.findRecordById("viewers", v.id);
+    const was = vv.getString("status");
+    vv.set("status", "revoked"); vv.set("revoked_by", me.id); vv.set("revoked_at", new Date().toISOString()); vv.set("feed_token", $security.randomString(40)); tx.save(vv);
+    const f = tx.findRecordById("families", fam.id);
+    const uid = vv.getString("user"); if (uid) { f.set("users", (f.get("users") || []).filter((u) => u !== uid)); tx.save(f); }
+    addEvent(tx, f.id, me.id, was === "invited" ? "viewer invitation withdrawn" : "viewer access ended", `${parentName(s, me.getString("role"))} ${was === "invited" ? "withdrew the invitation for" : "ended the access of"} ${viewerText(s, vv)}`, null, f.get("version"));
+    out = familyView(tx, f, me);
+  });
+  const other = otherMember($app, fam.id, me.id);
+  if (other) sendMail(userEmail($app, other.getString("user")), "A viewer's access to your Custody Calendar ended", `${parentName(s, me.getString("role"))} ended the access of ${viewerText(s, v)}.`);
+  if (v.getString("user")) sendMail(userEmail($app, v.getString("user")), "Your access to a Custody Calendar ended", `A parent ended your access to the shared calendar of ${parentName(s, "M")} and ${parentName(s, "F")}. The calendar address you may have added to a calendar app has stopped working.`);
+  return e.json(200, out);
 }, $apis.requireAuth("users"));
 
 // ---- leave the shared calendar (the record stays with the family) ----
 routerAdd("POST", "/api/cc/leave", (e) => {
-  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView } = require(`${__hooks}/cc_lib.js`);
-    const me = memberOf($app, e.auth.id);
-  if (!me) bad("You are not part of a shared calendar.");
+  const { jget, engine, bad, emailOk, body, newCode, parentName, memberOf, membersOf, otherMember, userEmail, applyProposal, addEvent, sendMail, familyView, viewerOf, requireParent, viewerText } = require(`${__hooks}/cc_lib.js`);
+    const me = requireParent($app, e.auth.id);
   const fam = $app.findRecordById("families", me.getString("family"));
   const myName = parentName(jget(fam, "settings"), me.getString("role"));
   const other = otherMember($app, fam.id, me.id);
