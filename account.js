@@ -49,7 +49,9 @@ const ACC = (() => {
   async function loadMe() {
     if (!A.auth) return;
     const me = await api('GET', '/api/cc/me');
+    const wasViewer = isViewer();
     A.me = me;
+    if (wasViewer && !me.family) { STATE = planDefaults(); rebuild(); A.err = 'A parent ended your access to that calendar. It is no longer shown on this device.'; A.view = 'start'; }
     if (me.family) adoptApproved(me.family.settings); else { A.approved = null; lsSet(APPROVED_KEY, null); }
     computeProposalMarks();
   }
@@ -58,7 +60,7 @@ const ACC = (() => {
     const prevApproved = A.approved; A.approved = clone(settings); lsSet(APPROVED_KEY, A.approved);
     const dirty = prevApproved ? isDirty(prevApproved) : false; // was the local STATE a draft against the previous approved copy?
     if (!dirty) { if (!lsGet('cc5_before_join') && !prevApproved && STATE && !sameSettings(STATE, settings)) lsSet('cc5_before_join', STATE); STATE = clone(settings); STATE.setupDone = true; rebuild(); }
-    else UI.note = 'The shared calendar changed while you were editing. Your draft is kept; send or discard it to see the latest.';
+    else UI.note = isViewer() ? 'The shared calendar changed while you were trying things. Your what-if is kept; press Back to the shared calendar to see the latest.' : 'The shared calendar changed while you were editing. Your draft is kept; send or discard it to see the latest.';
   }
   const stripVolatile = (s) => { const c = clone(s); delete c.setupDone; return c; };
   const sameSettings = (a, b) => CCEngine.stable(stripVolatile(a)) === CCEngine.stable(stripVolatile(b));
@@ -231,7 +233,7 @@ const ACC = (() => {
   function propItem(p, mine) {
     const by = roleName(A.me.members.find((m) => m.id === p.proposed_by) ? A.me.members.find((m) => m.id === p.proposed_by).role : 'M');
     const when = fDT(parseDateTime(p.created));
-    const pill = p.status === 'open' ? `<span class="pill w">${mine ? 'waiting' : 'needs your answer'}</span>` : p.status === 'approved' ? `<span class="pill ok">approved${p.unconfirmed ? ', not yet confirmed' : ''}</span>` : `<span class="pill">${E(p.status)}</span>`;
+    const pill = p.status === 'open' ? `<span class="pill w">${isViewer() ? 'open' : mine ? 'waiting' : 'needs your answer'}</span>` : p.status === 'approved' ? `<span class="pill ok">approved${p.unconfirmed ? ', not yet confirmed' : ''}</span>` : `<span class="pill">${E(p.status)}</span>`;
     let actions = '';
     if (isViewer()) actions = '';
     else if (p.status === 'open' && !mine) actions = A.declineFor === p.id ? `<form class="row" data-acct-form="decline" data-id="${p.id}"><input name="note" required placeholder="One-line reason" autofocus style="flex:1;min-width:160px"><button class="btn sm" type="submit">Decline</button><button class="btn sm quiet" type="button" data-acct="declineCancel">Cancel</button></form>` : `<span class="row"><button class="btn sm primary" data-acct="approve" data-arg="${p.id}">Approve</button><button class="btn sm" data-acct="decline" data-arg="${p.id}">Decline</button></span>`;

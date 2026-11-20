@@ -38,6 +38,7 @@ routerAdd("POST", "/api/cc/families", (e) => {
   if (!settings || typeof settings !== "object" || settings.v !== 5) bad("The settings are missing or from an older version of the page.");
   try { engine().build(settings); } catch (err) { bad("The calendar cannot be built from these settings: " + (err && err.message ? err.message : err)); }
   if (memberOf($app, e.auth.id)) bad("This account is already part of a shared calendar.");
+  if (viewerOf($app, e.auth.id)) bad("This account views a calendar as a third party. A parent uses a different email address.");
   let out = null;
   $app.runInTransaction((tx) => {
     const fam = new Record(tx.findCollectionByNameOrId("families"));
@@ -77,10 +78,11 @@ routerAdd("POST", "/api/cc/join", (e) => {
     let out = null;
     $app.runInTransaction((tx) => {
       const v = tx.findRecordById("viewers", inv.id);
+      if (v.getString("status") !== "invited" || v.getString("user")) bad("That invitation was already used.");
       v.set("user", e.auth.id); v.set("status", "active"); v.set("activated", new Date().toISOString()); tx.save(v);
       const f = tx.findRecordById("families", f0.id);
       const us = (f.get("users") || []).filter((u) => u !== e.auth.id); us.push(e.auth.id); f.set("users", us); tx.save(f);
-      addEvent(tx, f.id, inv.getString("invited_by"), "viewer joined", `${viewerText(jget(f, "settings"), v)} signed in and can now view the calendar and the record (${e.auth.email()})`, null, f.get("version"));
+      addEvent(tx, f.id, inv.getString("invited_by"), "viewer joined", `${viewerText(jget(f, "settings"), v)} signed in and can now view the calendar and the record`, null, f.get("version"));
       out = familyView(tx, f, v);
     });
     for (const m of membersOf($app, f0.id)) sendMail(userEmail($app, m.getString("user")), "A viewer joined your Custody Calendar", `${viewerText(jget(f0, "settings"), inv)} signed in with ${e.auth.email()} and can now view the calendar, proposals and record. Either parent can end that access from the Linked parent page.`);
@@ -99,7 +101,7 @@ routerAdd("POST", "/api/cc/join", (e) => {
     me.set("family", fam.id); me.set("user", e.auth.id); me.set("role", role); me.set("confirmed", false); me.set("feed_token", $security.randomString(40));
     tx.save(me);
     const f = tx.findRecordById("families", fam.id);
-    f.set("users", [members[0].getString("user"), e.auth.id]);
+    const us = (f.get("users") || []).filter((u) => u !== e.auth.id); us.push(e.auth.id); f.set("users", us);
     tx.save(f);
     addEvent(tx, fam.id, me.id, "joined", `${parentName(jget(f, "settings"), role)} joined with the code`, null, f.get("version"));
     out = familyView(tx, f, me);
@@ -211,8 +213,9 @@ routerAdd("POST", "/api/cc/publish", (e) => {
   if (!settings || typeof settings !== "object" || settings.v !== 5) bad("The settings are missing or from an older version of the page.");
   try { engine().build(settings); } catch (err) { bad("The calendar cannot be built from these settings: " + (err && err.message ? err.message : err)); }
   let rec = null;
-  if (b.id && b.secret) {
-    try { const r = $app.findRecordById("published", String(b.id)); if ($security.equal(r.getString("secret"), String(b.secret))) rec = r; } catch (_) {}
+  if (b.id) {
+    try { rec = $app.findRecordById("published", String(b.id)); } catch (_) { bad("That calendar address no longer exists. Make a new one."); }
+    if (!b.secret || !$security.equal(rec.getString("secret"), String(b.secret))) bad("This browser cannot update that calendar address (the key does not match). Make a new one and replace it in your calendar app.");
   }
   if (rec) { rec.set("settings", settings); rec.set("version", (rec.get("version") || 1) + 1); $app.save(rec); }
   else { rec = new Record($app.findCollectionByNameOrId("published")); rec.set("settings", settings); rec.set("secret", $security.randomString(40)); rec.set("version", 1); $app.save(rec); }
@@ -225,6 +228,8 @@ routerAdd("GET", "/api/cc/cal/{id}", (e) => {
   let rec = null;
   try { rec = $app.findRecordById("published", id); } catch (_) { throw new NotFoundError("No calendar at this address."); }
   const s = jget(rec, "settings");
+  // Remember use, at most once a day, so addresses nobody reads for 180 days can be removed.
+  try { const last = rec.getString("fetched"); if (!last || Date.now() - new Date(last).getTime() > 86400000) { rec.set("fetched", new Date().toISOString()); $app.save(rec); } } catch (_) {}
   const E = engine();
   const { result } = E.build(s);
   const text = E.icsText(result, { M: parentName(s, "M"), F: parentName(s, "F") }, { name: "Custody Calendar", refresh: "PT6H" });
@@ -232,6 +237,15 @@ routerAdd("GET", "/api/cc/cal/{id}", (e) => {
   e.response.header().set("Cache-Control", "no-store");
   e.response.header().set("Content-Disposition", 'inline; filename="custody-calendar.ics"');
   return e.string(200, text);
+});
+
+// Published addresses nobody has read for 180 days (or never read, 180 days after publishing) are removed nightly.
+// The count removed is written to the server log, so the cut-off is visible.
+cronAdd("published-cleanup", "20 4 * * *", () => {
+  const cutoff = new Date(Date.now() - 180 * 86400000).toISOString().replace("T", " ");
+  const rows = $app.findRecordsByFilter("published", "(fetched != '' && fetched < {:c}) || (fetched = '' && created < {:c})", "", 500, 0, { c: cutoff });
+  for (const r of rows) $app.delete(r);
+  if (rows.length) console.log("published-cleanup removed " + rows.length + " calendar address(es) unused since " + cutoff);
 });
 
 // ---- third-party viewers: invite, revoke ----
@@ -281,7 +295,8 @@ routerAdd("POST", "/api/cc/viewers/{id}/revoke", (e) => {
     out = familyView(tx, f, me);
   });
   const other = otherMember($app, fam.id, me.id);
-  if (other) sendMail(userEmail($app, other.getString("user")), "A viewer's access to your Custody Calendar ended", `${parentName(s, me.getString("role"))} ended the access of ${viewerText(s, v)}.`);
+  const wasInvited = v.getString("status") === "invited";
+  if (other) sendMail(userEmail($app, other.getString("user")), wasInvited ? "A viewer invitation for your Custody Calendar was withdrawn" : "A viewer's access to your Custody Calendar ended", wasInvited ? `${parentName(s, me.getString("role"))} withdrew the invitation for ${viewerText(s, v)}; they never had access.` : `${parentName(s, me.getString("role"))} ended the access of ${viewerText(s, v)}.`);
   if (v.getString("user")) sendMail(userEmail($app, v.getString("user")), "Your access to a Custody Calendar ended", `A parent ended your access to the shared calendar of ${parentName(s, "M")} and ${parentName(s, "F")}. The calendar address you may have added to a calendar app has stopped working.`);
   return e.json(200, out);
 }, $apis.requireAuth("users"));
