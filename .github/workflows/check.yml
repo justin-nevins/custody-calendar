@@ -120,9 +120,9 @@ jobs:
             const E=require("./engine.js");
             const base=(extra)=>Object.assign({v:5,parents:{M:{role:"mother",name:"A"},F:{role:"father",name:"J"}},children:[],pbd:{M:{},F:{}},regular:{on:true,pattern:"21,11",first:"father",xtime:"12:00"},phase:{begins:"date",ldDate:"2027-06-01",weeklyOn:true,weekAnchor:"2026-12-28",weeksPerCycle:2,weekly:{rows:E.WEEKLY_PLAN}},holidays:{},customs:[],vacations:{list:[],allow:{M:14,F:28},bridge:false,fit:false,recurring:[]},changes:[],xrules:[],cal:{start:"2027-01-01",years:1,limit:21,mode:"none",makeup:"none"}},extra);
             const old=base({holidays:{febtime:{on:true,who:"M",before:0,after:13,start:"00:00",end:"24:00",applies:"local"}}});
-            const neu=base({vacations:{list:[],allow:{M:14,F:28},bridge:false,recurring:[{id:"f",name:"February time",who:"mother",md:"02-01",days:14,start:"00:00",applies:"local",on:true}]}});
+            const neu=base({vacations:{list:[],allow:{M:14,F:28},bridge:false,fit:false,recurring:[{id:"f",name:"February time",who:"mother",md:"02-01",days:14,start:"00:00",applies:"local",on:true}]}});
             if(E.diffDays(E.build(old).result,E.build(neu).result).length){ console.error("recurring vacation differs from the holiday it replaces"); process.exit(1); }
-            const br=base({vacations:{list:[{id:"v",who:"F",s:"2027-01-09",sh:"12:00",e:"2027-01-14",eh:"12:00",note:"",applies:"both"}],allow:{M:14,F:28},bridge:true,recurring:[]},phase:{begins:"never",weeklyOn:true,weekAnchor:"2026-12-28",weeksPerCycle:2,weekly:{rows:E.WEEKLY_PLAN}}});
+            const br=base({vacations:{list:[{id:"v",who:"F",s:"2027-01-09",sh:"12:00",e:"2027-01-14",eh:"12:00",note:"",applies:"both"}],allow:{M:14,F:28},bridge:true,fit:false,recurring:[]},phase:{begins:"never",weeklyOn:true,weekAnchor:"2026-12-28",weeksPerCycle:2,weekly:{rows:E.WEEKLY_PLAN}}});
             const nb=JSON.parse(JSON.stringify(br)); nb.vacations.bridge=false;
             const cnt=(r)=>r.exchanges.filter(x=>x.t>=Date.UTC(2027,0,14)&&x.t<Date.UTC(2027,0,15)).length;
             if(!(cnt(E.build(nb).result)===2&&cnt(E.build(br).result)===0)){ console.error("bridge did not remove the short handback"); process.exit(1); }
