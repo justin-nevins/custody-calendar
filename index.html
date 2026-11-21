@@ -187,6 +187,7 @@ input[aria-invalid=true]{border-color:var(--warn);outline:2px solid var(--warn-s
 .field.check{justify-content:flex-start}
 .field label,.field .lbl{font-size:13px;color:var(--ink-2);font-weight:700}
 .field input,.field select,.field textarea{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-width:0;width:100%}
+.datebox{display:flex;gap:4px;align-items:stretch;min-width:0} .datebox input[type=text]{flex:1 1 auto;min-width:0} .datebox .pick{flex:0 0 40px;width:40px;padding:4px;color:transparent;cursor:pointer} .datebox .pick::-webkit-datetime-edit{display:none} .datebox .pick::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.9;margin:0 auto}
 .field.check{flex-direction:row;align-items:center;gap:8px}
 .field.check input,label.check input{flex:0 0 18px;width:18px;height:18px;margin:0}
 label.check{display:inline-flex;align-items:center;gap:6px}
@@ -570,7 +571,7 @@ const SECTIONS=[
 function renderSet(){ renderNav(); renderEdit(); const bn=$('setBanner'); bn.innerHTML=(ERR?`<div class="banner err">${esc(ERR)}</div>`:'')+ACC.banner(); }
 function renderNav(){ $('setNav').innerHTML=SECTIONS.map((x,i)=>`<button aria-selected="${x.id===UI.section}" data-sec="${x.id}"><span class="num">${i+1}</span><span><span class="t">${esc(x.t)}</span><br><span class="s">${esc(x.s())}</span></span></button>`).join(''); }
 function fld(label,inner){ return `<div class="field"><span class="lbl">${label}</span>${inner}</div>`; }
-function inp(path,opts={}){ const v=getPath(path); const t=opts.type||'text'; if(t==='date'){ const ok=!v||parseDate(v)!==null; return `<input type="text" inputmode="numeric" data-b="${path}" data-t="date" value="${esc(usdStr(v))}" placeholder="MM-DD-YYYY" autocomplete="off"${ok?'':' aria-invalid="true" title="Enter the date as MM-DD-YYYY"'}>`; } return `<input type="${t}" data-b="${path}"${opts.num?' data-t="num"':''} value="${esc(v==null?'':v)}"${opts.ph?` placeholder="${esc(opts.ph)}"`:''}${t==='time'?' step="3600"':''}${opts.min!=null?` min="${opts.min}"`:''}${opts.max!=null?` max="${opts.max}"`:''}>`; }
+function inp(path,opts={}){ const v=getPath(path); const t=opts.type||'text'; if(t==='date'){ const ok=!v||parseDate(v)!==null; const d=parseDate(v); return `<span class="datebox"><input type="text" inputmode="numeric" data-b="${path}" data-t="date" value="${esc(usdStr(v))}" placeholder="MM-DD-YYYY" autocomplete="off"${ok?'':' aria-invalid="true" title="Enter the date as MM-DD-YYYY"'}><input type="date" class="pick" data-pick="${path}" value="${d!==null?ymd(d):''}" aria-label="Pick a date" title="Pick a date" tabindex="-1"></span>`; } return `<input type="${t}" data-b="${path}"${opts.num?' data-t="num"':''} value="${esc(v==null?'':v)}"${opts.ph?` placeholder="${esc(opts.ph)}"`:''}${t==='time'?' step="3600"':''}${opts.min!=null?` min="${opts.min}"`:''}${opts.max!=null?` max="${opts.max}"`:''}>`; }
 function sel(path,options,opts={}){ let v=getPath(path); if(CCEngine.ROLE_TOKENS.includes(v))v=resolveWho(v); return `<select data-b="${path}"${opts.num?' data-t="num"':''}>${options.map(([val,l])=>`<option value="${val}"${String(val)===String(v)?' selected':''}>${esc(l)}</option>`).join('')}</select>`; }
 function chk(path,label){ return `<label class="field check"><input type="checkbox" data-b="${path}" data-t="bool"${getPath(path)?' checked':''}> <span>${label}</span></label>`; }
 function endInp(path){ const v=getPath(path); const eod=v==='24:00'; return `<span class="row" style="gap:6px"><input type="time" data-b="${path}" value="${eod?'00:00':esc(v)}" step="3600"${eod?' disabled':''}><label class="small row" style="gap:4px"><input type="checkbox" data-b="${path}" data-t="eod"${eod?' checked':''}> end of day</label></span>`; }
@@ -704,6 +705,7 @@ document.addEventListener('change',e=>{
   const t=e.target;
   if(t.dataset.act==='patBlock'){ const pat=patArr(); while(pat.length<=+t.dataset.arg)pat.push(''); pat[+t.dataset.arg]=String(Math.max(0,+t.value||0)||''); STATE.regular.pattern=pat.join(','); STATE.regular.preset='custom'; rerender(); return; }
   if(t.dataset.act==='parentNumber'){ const k=t.dataset.arg; const want=+t.value; const have=k==='M'?1:2; if(want!==have){ swapSlots(STATE); } rerender(); return; }
+  if(t.dataset.pick){ if(t.value&&parseDate(t.value)!==null)setPath(t.dataset.pick,t.value); rerender(); return; }
   if(!bindInput(t))return;
 
   // a holiday edited while unticked turns on
