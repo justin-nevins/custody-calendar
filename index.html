@@ -445,7 +445,7 @@ function vacWarnings(v){ const w=[]; const s=parseDate(v.s), e=parseDate(v.e); i
 function xtimeFor(key){ const t=parseDate(key); if(t===null||!RESULT)return '10:00'; const xs=RESULT.exchanges.filter(x=>x.t>=t&&x.t<t+DAYMS); if(xs.length)return hm(xs[0].t); if(!RESULT.inLocal(t+12*HOUR))return STATE.regular.xtime||'12:00'; const prev=RESULT.exchanges.filter(x=>x.t<t).pop(); return prev?hm(prev.t):'10:00'; }
 function recurText(r){ const m=/^(\d{1,2})-(\d{1,2})$/.exec((r.md||'').trim()); if(!m)return 'start date missing (MM-DD)'; const y=new Date().getFullYear(); const s=utc(y,+m[1],+m[2])+parseHours(r.start||'00:00')*HOUR; const e=s+Math.max(1,+r.days||1)*DAYMS; return `${MON[new Date(s).getUTCMonth()]} ${new Date(s).getUTCDate()} ${hm(s)} to ${MON[new Date(e).getUTCMonth()]} ${new Date(e).getUTCDate()} ${hm(e)}, ${Math.max(1,+r.days||1)} full day${(+r.days||1)===1?'':'s'}, every year${r.on===false?' (off)':''}`; }
 function rangeText(s,e){ return s===e?fDL(parseDate(s)):`${fD(parseDate(s))} to ${fD(parseDate(e))}`; }
-function finishSwap(s2,e2){ const w=UI.swap1; if(!w)return; const other=w.who==='M'?'F':'M'; const id=uid(); const x=w.x||xtimeFor(w.s); STATE.changes.push({id,kind:'swap',a:{who:w.who,s:w.s,sh:x,e:ymd(addD(parseDate(w.e),1)),eh:x},b:{who:other,s:s2,sh:x,e:ymd(addD(parseDate(e2),1)),eh:x},note:'',applies:'both',repeatUntil:''}); UI.openChg=id; UI.pick=null; UI.swap1=null; UI.swap2start=null; rerender(); go('set','changes'); }
+function finishSwap(s2,e2){ const w=UI.swap1; if(!w)return; const other=w.who==='M'?'F':'M'; const id=uid(); const x=w.x||xtimeFor(w.s); STATE.changes.push({id,kind:'swap',a:{who:w.who,s:w.s,sh:x,e:ymd(addD(parseDate(w.e),1)),eh:x},b:{who:other,s:s2,sh:x,e:ymd(addD(parseDate(e2),1)),eh:x},note:'',applies:'both',repeatUntil:''}); UI.openChg=id; UI.lastChange=id; UI.pick=null; UI.swap1=null; UI.swap2start=null; UI.sel=s2; rerender(); }
 function changeText(ch){ if(ch.kind==='swap'){ const a=ch.a||{}, b=ch.b||{}; if(!a.s||!a.e||!b.s||!b.e)return 'dates missing'; return CCEngine.changeSummary(STATE,ch); } if(ch.repeatUntil&&ch.kind==='give'){ return CCEngine.changeSummary(STATE,ch); } if(ch.kind==='give'){ if(!ch.s||!ch.e)return 'dates missing'; return `${PN(ch.who)} has ${fD(parseDate(ch.s))} ${ch.sh} to ${fD(parseDate(ch.e))} ${ch.eh}`; } const p=changePeriod(ch); const od=parseDate(ch.date); if(od===null)return 'date missing'; if(!p)return ch.newDate&&ch.newTime? `No exchange at ${fD(od)} ${ch.time} in the regular calendar. Pick the exchange's own date and time.`:'incomplete'; const o=od+parseHours(ch.time)*HOUR, n=parseDate(ch.newDate||ch.date)+parseHours(ch.newTime)*HOUR; return `Exchange of ${fD(o)} ${hm(o)} happens ${fD(n)} ${hm(n)} instead; ${PN(p.who)} has the time in between.`; }
 
 // ===================== Calendar place =====================
@@ -523,7 +523,9 @@ function renderPanel(){
   if(info.bad)rule+=` <span class="warnt">Part of a stretch over the ${STATE.cal.limit}-day limit.</span>`;
   const withLine=info.second?`<span class="who ${info.first}">${esc(PN(info.first))}</span> until <span class="mono">${String(info.firstH).padStart(2,'0')}:00</span>, then <span class="who ${info.second}">${esc(PN(info.second))}</span>`:`<span class="who ${info.first}">${esc(PN(info.first))}</span> all day`;
   const inRange=RESULT.periods.filter(p=>p.s<t+DAYMS&&p.e>t&&p.pri>0).sort((a,b)=>a.pri-b.pri);
+  const last=UI.lastChange?STATE.changes.find(c=>c.id===UI.lastChange):null;
   el.innerHTML=`
+   ${last?`<div class="notice"><b>Added:</b> ${esc(changeText(last))}<div class="row" style="margin-top:6px"><button class="btn sm" data-act="editLast">Edit times or note</button><button class="btn sm quiet" data-act="undoLast">Undo</button></div>${ACC.inFamily()?'<div class="small muted" style="margin-top:4px">It is a draft on this device until you send it from the Dashboard.</div>':''}</div>`:''}
    <div><span class="eyebrow">Selected day</span><h3>${fDL(t)}</h3></div>
    <dl class="kv">
      <dt>With</dt><dd>${withLine}</dd>
@@ -737,7 +739,7 @@ document.addEventListener('click',async e=>{
   if(b.dataset.day){ const k=b.dataset.day;
     if(UI.pick==='swap2'){ if(!UI.swap2start){ UI.swap2start=k; } else { const s=UI.swap2start<k?UI.swap2start:k, e=UI.swap2start<k?k:UI.swap2start; finishSwap(s,e); return; } renderMonth(); renderPanel(); return; }
     if(UI.pick==='range'||(e.shiftKey&&UI.sel)){ const a=UI.sel||k; UI.range={s:a<k?a:k,e:a<k?k:a}; UI.pick=null; UI.sel=k; renderMonth(); renderPanel(); return; }
-    UI.sel=k; UI.range=null; renderMonth(); renderPanel(); return; }
+    UI.sel=k; UI.range=null; UI.lastChange=null; renderMonth(); renderPanel(); return; }
   if(b.dataset.month){ UI.cur={y:UI.cur.y,m:+b.dataset.month}; setView('month'); return; }
   if(b.dataset.step&&!b.dataset.act){ UI.step=+b.dataset.step; renderSetup(); return; }
   const act=b.dataset.act, arg=b.dataset.arg; if(!act)return;
@@ -749,7 +751,7 @@ document.addEventListener('click',async e=>{
     case 'agendaAll': UI.agendaAll=!UI.agendaAll; b.textContent=UI.agendaAll?'Show from today':'Show the whole calendar'; renderAgenda(); return;
     case 'changeExchange': { const t=+arg; const id=uid(); S.changes.push({id,kind:'move',date:ymd(t),time:hm(t),newDate:ymd(t),newTime:hm(t),note:''}); UI.openChg=id; rerender(); go('set','changes'); return; }
     case 'addVacHere': { const id=uid(); const s=parseDate(arg); S.vacations.list.push({id,who:'M',s:arg,sh:'10:00',e:ymd(addD(s,7)),eh:'10:00',note:'',applies:'local'}); UI.openVac=id; rerender(); go('set','vac'); return; }
-    case 'giveHere': { const id=uid(); const s=parseDate(arg); const info=dayCell(arg); const other=info?(info.first==='M'?'F':'M'):'M'; const x=xtimeFor(arg); S.changes.push({id,kind:'give',who:other,s:arg,sh:x,e:ymd(addD(s,1)),eh:x,note:''}); UI.openChg=id; rerender(); go('set','changes'); return; }
+    case 'giveHere': { const id=uid(); const s=parseDate(arg); const info=dayCell(arg); const other=info?(info.first==='M'?'F':'M'):'M'; const x=xtimeFor(arg); S.changes.push({id,kind:'give',who:other,s:arg,sh:x,e:ymd(addD(s,1)),eh:x,note:'',applies:'both',repeatUntil:''}); UI.openChg=id; UI.lastChange=id; rerender(); return; }
     case 'color': { const [code,c]=arg.split(':'); S.parents[code].color=c; const o=code==='M'?'F':'M'; if(S.parents[o].color===c)S.parents[o].color=COLORS.find(x=>x!==c); rerender(); return; }
     case 'addChild': S.children.push({id:uid(),name:'',md:'',who:'motherOdd',before:0,after:1,start:'16:00',end:'10:00',on:true}); rerender(); return;
     case 'rmChild': S.children.splice(+arg,1); rerender(); return;
@@ -772,12 +774,14 @@ document.addEventListener('click',async e=>{
     case 'rmCustom': S.customs.splice(+arg,1); rerender(); return;
     case 'ofwCopy': { const ch=S.changes.find(c=>c.id===arg); if(!ch)return; const txt=CCEngine.ofwText(S,ch,{}); try{ await navigator.clipboard.writeText(txt); UI.note='OFW text copied. Paste it into an OFW message.'; }catch(e){ UI.note='Copy failed in this browser. The text: '+txt; } render(); return; }
     case 'pickRange': UI.pick='range'; UI.range=null; renderMonth(); renderPanel(); return;
+    case 'editLast': { const id=UI.lastChange; UI.lastChange=null; UI.openChg=id; go('set','changes'); return; }
+    case 'undoLast': { const i=S.changes.findIndex(c=>c.id===UI.lastChange); if(i>=0)S.changes.splice(i,1); UI.lastChange=null; rerender(); return; }
     case 'pickCancel': UI.pick=null; UI.swap1=null; UI.swap2start=null; renderMonth(); renderPanel(); return;
     case 'clearRange': UI.range=null; renderMonth(); renderPanel(); return;
-    case 'giveRange': { const r=UI.range; if(!r)return; const id=uid(); const x=xtimeFor(r.s); S.changes.push({id,kind:'give',who:arg,s:r.s,sh:x,e:ymd(addD(parseDate(r.e),1)),eh:x,note:'',applies:'both',repeatUntil:''}); UI.openChg=id; UI.range=null; rerender(); go('set','changes'); return; }
+    case 'giveRange': { const r=UI.range; if(!r)return; const id=uid(); const x=xtimeFor(r.s); S.changes.push({id,kind:'give',who:arg,s:r.s,sh:x,e:ymd(addD(parseDate(r.e),1)),eh:x,note:'',applies:'both',repeatUntil:''}); UI.openChg=id; UI.lastChange=id; UI.sel=r.s; UI.range=null; rerender(); return; }
     case 'swapRange': { const r=UI.range; if(!r)return; UI.swap1={s:r.s,e:r.e,who:arg,x:xtimeFor(r.s)}; UI.swap2start=null; UI.pick='swap2'; UI.range=null; renderMonth(); renderPanel(); return; }
     case 'addVacRange': { const r=UI.range; if(!r)return; const info=dayCell(r.s); const who=info?info.first:'M'; const id=uid(); S.vacations.list.push({id,who,s:r.s,sh:'10:00',e:ymd(addD(parseDate(r.e),1)),eh:'10:00',note:'',applies:'local'}); UI.openVac=id; UI.range=null; rerender(); go('set','vac'); return; }
-    case 'swapHere': { const id=uid(); const s=parseDate(arg); const info=dayCell(arg); const other=info?(info.first==='M'?'F':'M'):'F'; const mine=other==='M'?'F':'M'; const x=xtimeFor(arg); S.changes.push({id,kind:'swap',a:{who:other,s:arg,sh:x,e:ymd(addD(s,1)),eh:x},b:{who:mine,s:ymd(addD(s,7)),sh:x,e:ymd(addD(s,8)),eh:x},note:'',applies:'both',repeatUntil:''}); UI.openChg=id; rerender(); go('set','changes'); return; }
+    case 'swapHere': { const info=dayCell(arg); const other=info?(info.first==='M'?'F':'M'):'F'; UI.swap1={s:arg,e:arg,who:other,x:xtimeFor(arg)}; UI.swap2start=null; UI.pick='swap2'; UI.range=null; renderMonth(); renderPanel(); return; }
     case 'addChange': { const id=uid(); const t=todayT(); if(arg==='swap'){ S.changes.push({id,kind:'swap',a:{who:'M',s:ymd(t),sh:'10:00',e:ymd(addD(t,1)),eh:'10:00'},b:{who:'F',s:ymd(addD(t,7)),sh:'10:00',e:ymd(addD(t,8)),eh:'10:00'},note:'',applies:'both',repeatUntil:''}); } else if(arg==='give')S.changes.push({id,kind:'give',who:'M',s:ymd(t),sh:'10:00',e:ymd(addD(t,1)),eh:'10:00',note:''}); else { const nx=RESULT&&RESULT.exchanges.find(x=>x.t>nowT()); const xt=nx?nx.t:t; S.changes.push({id,kind:'move',date:ymd(xt),time:hm(xt),newDate:ymd(xt),newTime:hm(xt),note:''}); } UI.openChg=id; rerender(); return; }
     case 'chgEdit': UI.openChg=UI.openChg===arg?null:arg; render(); return;
     case 'rmChange': S.changes.splice(+arg,1); rerender(); return;
