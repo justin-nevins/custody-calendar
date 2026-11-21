@@ -153,6 +153,19 @@ function computeSchedule(c){
   for(const cu of (c.customs||[])){ for(const [ps,pe] of parsePeriods(cu.dates)){ const y=new Date(ps).getUTCFullYear(); periods.push({s:ps,e:pe,who:whoFor(cu.who||'M',y),name:cu.name||'Custom period',pri:(cu.pri==null||cu.pri==='')?3:+cu.pri,applies:cu.applies||'both',kind:cu.kind||'custom'}); } }
   periods.sort((a,b)=>b.pri-a.pri);
   periods.forEach((p,k)=>{p.idx=k+1;});
+  // Fit vacation times to the schedule (c.fit): on a vacation's first day and last day, it starts and ends at that day's
+  // regular exchange time (5:00 p.m. when the day's exchange is at 5, 10:00 a.m. when it is at 10). Entered times apply
+  // only on days without a regular exchange. Vacations and recurring vacation time only.
+  if(c.fit!==false){
+    const regAt=i=>{ const t=t0+i*HOUR; return inWeekly(t)?weeklyParent(t):blockParent(t); };
+    const dayBounds=(d)=>{ const out=[]; const a=Math.max(1,d*24), b=Math.min(N,(d+1)*24); for(let i=a;i<b;i++){ if(regAt(i)!==regAt(i-1))out.push(i); } return out; };
+    for(const p of periods){
+      if(p.kind!=='vacation')continue;
+      const ds=Math.floor((p.s-t0)/DAYMS), de=Math.floor((p.e-HOUR-t0)/DAYMS);
+      if(ds>=0&&ds*24<N){ const bs=dayBounds(ds); if(bs.length){ const hs=Math.round((p.s-t0)/HOUR); const k=bs.reduce((best,i)=>Math.abs(i-hs)<Math.abs(best-hs)?i:best,bs[0]); p.s=t0+k*HOUR; } }
+      if(de>=0&&de*24<N){ const be=dayBounds(de); if(be.length){ const he=Math.round((p.e-t0)/HOUR); const k=be.reduce((best,i)=>Math.abs(i-he)<Math.abs(best-he)?i:best,be[0]); const ne=t0+k*HOUR; if(ne>p.s)p.e=ne; } }
+    }
+  }
   // Period overlay: which hours a holiday, birthday, vacation, custom period or one-time change takes, and for whom.
   const pp=new Uint8Array(N), ps=new Int16Array(N);
   for(const p of periods){
@@ -302,7 +315,7 @@ function configFrom(S,withChanges,base){
     pattern:String(S.regular.pattern||'').split(/[,\s/-]+/).filter(Boolean),first:resolveWho(S.regular.first,S),xtime:S.regular.xtime||'12:00',
     begins,move:S.phase.move||null,movePre:+S.phase.movePre||0,ldDate:S.phase.ldDate||null,ldEnd:S.phase.ldEnd||null,weeklyOn:!!S.phase.weeklyOn,weekly:(S.phase.weekly.rows||[]).map(r=>({...r,parent:resolveWho(r.parent,S)})),weeksPerCycle:+S.phase.weeksPerCycle||2,weekAnchor:S.phase.weekAnchor,
     holidays,birthdays,customs,names,
-    recurring:(((S.vacations||{}).recurring)||[]).map(r=>({...r,who:resolveWho(r.who,S)})),bridge:(S.vacations||{}).bridge!==false,
+    recurring:(((S.vacations||{}).recurring)||[]).map(r=>({...r,who:resolveWho(r.who,S)})),bridge:(S.vacations||{}).bridge!==false,fit:(S.vacations||{}).fit!==false,
     xrules:(S.xrules||[]).filter(r=>r&&r.time).map(r=>({applies:r.applies||'both',days:r.days||{},dates:r.dates||'',time:r.time}))};
 }
 // A one-time change becomes a short period with priority 0. 'move': an exchange at old date/time happens at a new
@@ -398,7 +411,7 @@ function applyProposal(settings,kind,payload){
   return s;
 }
 // What differs between two settings objects, by section, plus the items added, edited or removed.
-const SECTION_KEYS={people:s=>[s.parents,s.children,s.pbd],regular:s=>[s.regular],local:s=>[s.phase.weeklyOn,s.phase.weekAnchor,s.phase.weeksPerCycle,s.phase.weekly],change:s=>[s.phase.begins,s.phase.move,s.phase.movePre,s.phase.ldDate,s.phase.ldEnd],hol:s=>[s.holidays,s.customs],vac:s=>[s.vacations&&s.vacations.allow,s.vacations&&s.vacations.notice,s.vacations&&s.vacations.maxLen,s.vacations&&s.vacations.recurring,s.vacations&&s.vacations.bridge],limits:s=>[s.cal],xch:s=>[s.xrules||[]]};
+const SECTION_KEYS={people:s=>[s.parents,s.children,s.pbd],regular:s=>[s.regular],local:s=>[s.phase.weeklyOn,s.phase.weekAnchor,s.phase.weeksPerCycle,s.phase.weekly],change:s=>[s.phase.begins,s.phase.move,s.phase.movePre,s.phase.ldDate,s.phase.ldEnd],hol:s=>[s.holidays,s.customs],vac:s=>[s.vacations&&s.vacations.allow,s.vacations&&s.vacations.notice,s.vacations&&s.vacations.maxLen,s.vacations&&s.vacations.recurring,s.vacations&&s.vacations.bridge,s.vacations&&s.vacations.fit],limits:s=>[s.cal],xch:s=>[s.xrules||[]]};
 // JSON with sorted keys, so the same settings compare equal whichever side built the object.
 function stable(x){ if(x===undefined)return 'null'; if(x===null||typeof x!=='object')return JSON.stringify(x); if(Array.isArray(x))return '['+x.map(stable).join(',')+']'; return '{'+Object.keys(x).sort().map(k=>x[k]===undefined?null:JSON.stringify(k)+':'+stable(x[k])).filter(Boolean).join(',')+'}'; }
 function diffSettings(a,b){
