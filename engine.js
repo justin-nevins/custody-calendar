@@ -147,7 +147,8 @@ function computeSchedule(c){
     for(const h of CAT){ const cfg=c.holidays&&c.holidays[h.id]; if(!cfg||!cfg.on)continue; const entry=(c.names&&c.names[h.id])?{...h,name:c.names[h.id]}:h; for(const p of periodsFor(entry,cfg,y,h.rule(y)))periods.push(p); }
     for(const [id,cfg] of Object.entries(c.birthdays||{})){ if(!cfg||!cfg.on)continue; const m=/^(\d{1,2})-(\d{1,2})$/.exec((cfg.md||'').trim()); const day=m?utc(y,+m[1],+m[2]):null; for(const p of periodsFor({name:cfg.name||'Birthday',pri:1},cfg,y,day))periods.push(p); }
     // Recurring vacation time: a period a parent has every year (the plan's first two weeks of February and May).
-    for(const rv of (c.recurring||[])){ if(!rv||rv.on===false)continue; const m=/^(\d{1,2})-(\d{1,2})$/.exec((rv.md||'').trim()); const day=m?utc(y,+m[1],+m[2]):null; for(const p of periodsFor({name:rv.name||'Vacation',pri:3},{who:rv.who,before:0,after:Math.max(0,(+rv.days||1)-1),start:rv.start||'00:00',end:rv.end||'24:00',dates:'',applies:rv.applies||'both'},y,day)){ p.kind='vacation'; periods.push(p); } }
+    // A recurring vacation is `days` full 24-hour periods from its start time: 14 days from Feb 1 12:00 ends Feb 15 12:00.
+    for(const rv of (c.recurring||[])){ if(!rv||rv.on===false)continue; const m=/^(\d{1,2})-(\d{1,2})$/.exec((rv.md||'').trim()); const day=m?utc(y,+m[1],+m[2]):null; if(day===null)continue; const s=day+parseHours(rv.start||'00:00')*HOUR, e=s+Math.max(1,+rv.days||1)*DAYMS; periods.push({s,e,who:whoFor(rv.who,y),name:rv.name||'Vacation',pri:3,applies:rv.applies||'both',kind:'vacation'}); }
   }
   for(const cu of (c.customs||[])){ for(const [ps,pe] of parsePeriods(cu.dates)){ const y=new Date(ps).getUTCFullYear(); periods.push({s:ps,e:pe,who:whoFor(cu.who||'M',y),name:cu.name||'Custom period',pri:(cu.pri==null||cu.pri==='')?3:+cu.pri,applies:cu.applies||'both',kind:cu.kind||'custom'}); } }
   periods.sort((a,b)=>b.pri-a.pri);
