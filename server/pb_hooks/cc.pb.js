@@ -149,7 +149,7 @@ routerAdd("POST", "/api/cc/proposals", (e) => {
   const answerBy = parseAnswerBy(b.answer_by);
   let payload = b.payload;
   if (kind === "care") {
-    // First option to care (plan II.I): the asking parent will be away; the time is offered to the other parent.
+    // First option to care: the asking parent will be away; the time is offered to the other parent.
     const other = members.find((m) => m.id !== me.id); if (!other) bad("A care request needs the other parent on the calendar.");
     const c = payload || {};
     for (const k of ["s", "e"]) if (!/^\d{4}-\d{2}-\d{2}$/.test(String(c[k] || ""))) bad("The care request needs a from date and an until date.");
