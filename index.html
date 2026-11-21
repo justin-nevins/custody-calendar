@@ -397,10 +397,10 @@ function shareLink(){ const s=btoa(unescape(encodeURIComponent(JSON.stringify(ST
 // ----- config for the engine (engine.js does the work; the page passes its state) -----
 function toConfig(withChanges){ return CCEngine.configFrom(STATE,withChanges,BASE); }
 function changePeriod(ch){ return CCEngine.changePeriod(ch,BASE); }
-let BASE=null, RESULT=null, ERR=null;
+let BASE=null, RESULT=null, ERR=null, NOVAC=null; // NOVAC: the schedule with no planned vacations, to count vacation days taken from the other parent
 function rebuild(){
   ERR=null;
-  try{ BASE=computeSchedule(toConfig(false)); RESULT=computeSchedule(toConfig(true)); }
+  try{ BASE=computeSchedule(toConfig(false)); RESULT=computeSchedule(toConfig(true)); try{ const S0=JSON.parse(JSON.stringify(STATE)); S0.vacations.list=[]; NOVAC=computeSchedule(CCEngine.configFrom(S0,false,null)); }catch(e){ NOVAC=null; } }
   catch(e){ ERR=e.message; if(!RESULT)RESULT=null; }
   saveState(); applyColors();
 }
@@ -427,11 +427,14 @@ const APPLIES=[['both','Both schedules'],['ld','Long distance schedule only'],['
 function xruleText(r){ const days=Object.entries(r.days||{}).filter(([k,v])=>v).map(([k])=>DOWN[+k]); const when=[days.length?days.join(', '):'', (r.dates||'').trim()?'on the dates listed':''].filter(Boolean).join(' ')||'every exchange'; const what=[r.placeKind==='ending'?"at the home of the parent whose time is ending":r.placeKind==='starting'?"at the home of the parent whose time is starting":r.placeKind==='text'&&(r.place||'').trim()?`at ${r.place.trim()}`:'', r.time?`at ${r.time}`:''].filter(Boolean).join(', ')||'no change'; const ap=r.applies==='ld'?' (long distance)':r.applies==='local'?' (local)':''; return `${when}${ap}: ${what}${r.note?` · ${r.note}`:''}`; }
 const appliesText=a=>a==='ld'?'long distance only':a==='local'?'local only':'';
 const appliesTag=a=>a&&a!=='both'?` <span class="pill">${appliesText(a)}</span>`:'';
-function vacUsed(who,y){ let n=0; for(const v of STATE.vacations.list){ if(v.who!==who||!v.s||!v.e)continue; const s=parseDate(v.s); if(s===null||new Date(s).getUTCFullYear()!==y)continue; const e=parseDate(v.e); n+=Math.max(0,(e+parseHours(v.eh)*HOUR-s-parseHours(v.sh)*HOUR)/DAYMS); } return n; }
+// Vacation days used: only the hours inside the vacation that would otherwise be the other parent's. Days that are
+// the vacationing parent's own regular time do not count against the allowance.
+function vacUsed(who,y){ let n=0; for(const v of STATE.vacations.list){ if(v.who!==who||!v.s||!v.e)continue; const s=parseDate(v.s); if(s===null||new Date(s).getUTCFullYear()!==y)continue; const e=parseDate(v.e); const S=s+parseHours(v.sh)*HOUR, E=e+parseHours(v.eh)*HOUR; if(E<=S)continue; n+=vacTaken(who,S,E); } return n; }
+function vacTaken(who,S,E){ if(!NOVAC)return (E-S)/DAYMS; let h=0; for(const sg of NOVAC.segs){ const a=Math.max(sg.s,S), b=Math.min(sg.e,E); if(b>a&&sg.p!==who)h+=(b-a)/HOUR; } return h/24; }
 function vacWarnings(v){ const w=[]; const s=parseDate(v.s), e=parseDate(v.e); if(s===null||e===null)return ['Enter a first and a last day.']; const S=s+parseHours(v.sh)*HOUR, E=e+parseHours(v.eh)*HOUR; if(E<=S)return ['The end is before the start.'];
   const len=(E-S)/DAYMS; const A=STATE.vacations; if(A.maxLen&&len>A.maxLen)w.push(`${fmt1(len)} days is longer than the ${A.maxLen}-day limit for one vacation.`);
   if(RESULT&&(v.applies||'both')!=='local'&&!RESULT.inLocal(S)&&!RESULT.inLocal(E-HOUR))w.push('Falls under the long distance schedule. The plan has vacation time under the same city schedule only.');
-  const y=new Date(S).getUTCFullYear(); const used=vacUsed(v.who,y); if(A.allow[v.who]&&used>A.allow[v.who])w.push(`${PN(v.who)} would use ${fmt1(used)} of ${A.allow[v.who]} vacation days in ${y}.`);
+  const y=new Date(S).getUTCFullYear(); const used=vacUsed(v.who,y); if(A.allow[v.who]&&used>A.allow[v.who])w.push(`${PN(v.who)} would use ${fmt1(used)} of ${A.allow[v.who]} vacation days in ${y}.`); const taken=vacTaken(v.who,S,E); if(NOVAC&&Math.abs(taken-len)>0.01)w.push(`${fmt1(taken)} of these ${fmt1(len)} days come from ${PN(v.who==='M'?'F':'M')}'s time and count against the allowance; the rest is ${PN(v.who)}'s own regular time.`);
   const lead=(S-todayT())/DAYMS; if(S>todayT()&&A.notice&&lead<A.notice)w.push(`Starts in ${Math.floor(lead)} days; the plan asks for ${A.notice} days notice.`);
   if(BASE){ const hits=BASE.periods.filter(p=>p.pri>=1&&p.pri<=2&&p.who!==v.who&&p.s<E&&p.e>S); for(const h of hits)w.push(`Overlaps ${h.name} (${PN(h.who)}'s, ${fD(h.s)} to ${fD(h.e)}); the holiday wins.`); }
   return w; }
@@ -632,6 +635,7 @@ function secHtml(id){
     <details class="help"><summary>Which wins when two overlap</summary><ol><li>One-time changes</li><li>Birthdays, Mother's Day, Father's Day</li><li>Thanksgiving, Christmas, New Year</li><li>Vacations</li><li>Other holidays</li><li>The schedule in force (long distance or local)</li></ol></details>`; }
   case 'vac': { const V=S.vacations; const Y=new Date().getFullYear(); return `<div class="head"><div><h2>Vacations</h2><p class="muted">The allowance from the plan, and the vacations actually planned. Vacation time exists under the same city schedule only; the long distance schedule has none, so new vacations apply under the local schedule. A vacation takes time from the other parent's regular schedule; holidays still win.</p></div><button class="btn sm primary" data-act="addVac">+ Add a vacation</button></div>
     <div class="form four">${fld(`${esc(PN('M'))}, days a year`,inp('vacations.allow.M',{type:'number',num:true,min:0}))}${fld(`${esc(PN('F'))}, days a year`,inp('vacations.allow.F',{type:'number',num:true,min:0}))}${fld('Notice required (days, 0 = none)',inp('vacations.notice',{type:'number',num:true,min:0}))}${fld('Longest single vacation (days)',inp('vacations.maxLen',{type:'number',num:true,min:0}))}</div>
+    <p class="small muted">Used days count only the time taken from the other parent. A vacation that runs over your own regular days uses none of the allowance for those days.</p>
     <div class="row small muted">${[Y,Y+1].map(y=>`<span class="pill">${y}: ${esc(PN('M'))} ${fmt1(vacUsed('M',y))} of ${V.allow.M} · ${esc(PN('F'))} ${fmt1(vacUsed('F',y))} of ${V.allow.F}</span>`).join('')}</div>
     ${chk('vacations.fit','Fit vacation times to the schedule: on the first and last day, a vacation starts and ends at that day\'s regular exchange time (5:00 p.m. when the exchange is at 5, 10:00 a.m. when it is at 10). The times you enter apply only on days without a regular exchange.')}
     ${chk('vacations.bridge','Bridge short gaps: when the regular schedule would hand the child back to the same parent within 24 hours of a vacation\'s start or end, the vacation runs through the gap with no exchange (vacations and recurring vacation time only; holidays keep their exact times)')}
