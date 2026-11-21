@@ -146,6 +146,8 @@ function computeSchedule(c){
   for(let y=y0-1;y<=y0+years;y++){
     for(const h of CAT){ const cfg=c.holidays&&c.holidays[h.id]; if(!cfg||!cfg.on)continue; const entry=(c.names&&c.names[h.id])?{...h,name:c.names[h.id]}:h; for(const p of periodsFor(entry,cfg,y,h.rule(y)))periods.push(p); }
     for(const [id,cfg] of Object.entries(c.birthdays||{})){ if(!cfg||!cfg.on)continue; const m=/^(\d{1,2})-(\d{1,2})$/.exec((cfg.md||'').trim()); const day=m?utc(y,+m[1],+m[2]):null; for(const p of periodsFor({name:cfg.name||'Birthday',pri:1},cfg,y,day))periods.push(p); }
+    // Recurring vacation time: a period a parent has every year (the plan's first two weeks of February and May).
+    for(const rv of (c.recurring||[])){ if(!rv||rv.on===false)continue; const m=/^(\d{1,2})-(\d{1,2})$/.exec((rv.md||'').trim()); const day=m?utc(y,+m[1],+m[2]):null; for(const p of periodsFor({name:rv.name||'Vacation',pri:3},{who:rv.who,before:0,after:Math.max(0,(+rv.days||1)-1),start:rv.start||'00:00',end:rv.end||'24:00',dates:'',applies:rv.applies||'both'},y,day)){ p.kind='vacation'; periods.push(p); } }
   }
   for(const cu of (c.customs||[])){ for(const [ps,pe] of parsePeriods(cu.dates)){ const y=new Date(ps).getUTCFullYear(); periods.push({s:ps,e:pe,who:whoFor(cu.who||'M',y),name:cu.name||'Custom period',pri:(cu.pri==null||cu.pri==='')?3:+cu.pri,applies:cu.applies||'both',kind:cu.kind||'custom'}); } }
   periods.sort((a,b)=>b.pri-a.pri);
@@ -288,6 +290,7 @@ function configFrom(S,withChanges,base){
     pattern:String(S.regular.pattern||'').split(/[,\s/-]+/).filter(Boolean),first:resolveWho(S.regular.first,S),xtime:S.regular.xtime||'12:00',
     begins,move:S.phase.move||null,movePre:+S.phase.movePre||0,ldDate:S.phase.ldDate||null,ldEnd:S.phase.ldEnd||null,weeklyOn:!!S.phase.weeklyOn,weekly:(S.phase.weekly.rows||[]).map(r=>({...r,parent:resolveWho(r.parent,S)})),weeksPerCycle:+S.phase.weeksPerCycle||2,weekAnchor:S.phase.weekAnchor,
     holidays,birthdays,customs,names,
+    recurring:(((S.vacations||{}).recurring)||[]).map(r=>({...r,who:resolveWho(r.who,S)})),
     xrules:(S.xrules||[]).filter(r=>r&&r.time).map(r=>({applies:r.applies||'both',days:r.days||{},dates:r.dates||'',time:r.time}))};
 }
 // A one-time change becomes a short period with priority 0. 'move': an exchange at old date/time happens at a new
@@ -383,7 +386,7 @@ function applyProposal(settings,kind,payload){
   return s;
 }
 // What differs between two settings objects, by section, plus the items added, edited or removed.
-const SECTION_KEYS={people:s=>[s.parents,s.children,s.pbd],regular:s=>[s.regular],local:s=>[s.phase.weeklyOn,s.phase.weekAnchor,s.phase.weeksPerCycle,s.phase.weekly],change:s=>[s.phase.begins,s.phase.move,s.phase.movePre,s.phase.ldDate,s.phase.ldEnd],hol:s=>[s.holidays,s.customs],vac:s=>[s.vacations&&s.vacations.allow,s.vacations&&s.vacations.notice,s.vacations&&s.vacations.maxLen],limits:s=>[s.cal],xch:s=>[s.xrules||[]]};
+const SECTION_KEYS={people:s=>[s.parents,s.children,s.pbd],regular:s=>[s.regular],local:s=>[s.phase.weeklyOn,s.phase.weekAnchor,s.phase.weeksPerCycle,s.phase.weekly],change:s=>[s.phase.begins,s.phase.move,s.phase.movePre,s.phase.ldDate,s.phase.ldEnd],hol:s=>[s.holidays,s.customs],vac:s=>[s.vacations&&s.vacations.allow,s.vacations&&s.vacations.notice,s.vacations&&s.vacations.maxLen,s.vacations&&s.vacations.recurring],limits:s=>[s.cal],xch:s=>[s.xrules||[]]};
 // JSON with sorted keys, so the same settings compare equal whichever side built the object.
 function stable(x){ if(x===undefined)return 'null'; if(x===null||typeof x!=='object')return JSON.stringify(x); if(Array.isArray(x))return '['+x.map(stable).join(',')+']'; return '{'+Object.keys(x).sort().map(k=>x[k]===undefined?null:JSON.stringify(k)+':'+stable(x[k])).filter(Boolean).join(',')+'}'; }
 function diffSettings(a,b){
