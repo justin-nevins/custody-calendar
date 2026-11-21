@@ -260,6 +260,7 @@ details.ofw{margin-top:6px;font-size:13px} details.ofw summary{cursor:pointer;co
   <div class="brand"><h1>Custody Calendar</h1><span class="tag">works without an account; sign in to share it with the other parent</span></div>
   <nav class="tabs" role="tablist" aria-label="Places">
     <button role="tab" id="tab-cal" aria-selected="true" data-go="cal">Calendar</button>
+    <button role="tab" id="tab-time" aria-selected="false" data-go="time">Time off and changes</button>
     <button role="tab" id="tab-set" aria-selected="false" data-go="set">Settings</button>
     <button role="tab" id="tab-setup" aria-selected="false" data-go="setup">Setup</button>
     <button role="tab" id="tab-acct" aria-selected="false" data-go="acct">Sign in</button>
@@ -289,6 +290,14 @@ details.ofw{margin-top:6px;font-size:13px} details.ofw summary{cursor:pointer;co
       <div id="viewYear" hidden><div class="year" id="year"></div></div>
     </div>
     <aside class="panel" id="dayPanel"></aside>
+  </div>
+</section>
+
+<section class="place wrap" id="place-time">
+  <div id="timeBanner"></div>
+  <div class="set-grid">
+    <nav class="nav" aria-label="Time off and changes" id="timeNav"></nav>
+    <div class="edit" id="timeEdit"></div>
   </div>
 </section>
 
@@ -415,7 +424,7 @@ function bindInput(t){
   if(ty==='num')v=+t.value||0; else if(ty==='bool')v=!!t.checked; else if(ty==='eod'){ v=t.checked?'24:00':'10:00'; } else if(ty==='startmd'||ty==='endmd'){ const md=parseMd(t.dataset.md); const n=md?daysFromMd(md,t.value,ty==='startmd'?'start':'end',new Date().getFullYear()):null; if(n===null)return true; v=n; } else if(ty==='date'){ const d=parseDate(t.value); v=d!==null?ymd(d):t.value.trim(); } else v=t.value;
   setPath(p,v); return true;
 }
-const UI={place:'cal',view:'month',cur:null,sel:null,section:'people',step:1,openHol:null,openVac:null,openChg:null,agendaAll:false,note:''};
+const UI={place:'cal',view:'month',cur:null,sel:null,section:'people',tsection:'vac',step:1,openHol:null,openVac:null,openChg:null,agendaAll:false,note:''};
 
 // ----- helpers for display -----
 function periodText(entry,cfg,y){ const list=periodsFor(entry,cfg,y,entry.rule?entry.rule(y):entry.day(y)); if(!list.length)return `${y}: no dates`; return list.map(p=>`${y}: ${fD(p.s)} ${hm(p.s)} to ${fD(p.e)} ${hm(p.e)}, ${PN(p.who)}`).join('; '); }
@@ -510,7 +519,7 @@ function renderMonth(){
 function renderPanel(){
   const el=$('dayPanel');
   if(RESULT&&UI.pick==='range'){ el.innerHTML=`<div><span class="eyebrow">Selecting days</span><h3>From ${fDL(parseDate(UI.sel))}</h3></div><p class="muted">Now tap the last day. The days in between are selected too.</p><div class="row"><button class="btn sm quiet" data-act="pickCancel">Cancel</button></div>`; return; }
-  if(RESULT&&UI.pick==='swap2'){ const w=UI.swap1; const other=w.who==='M'?'F':'M'; el.innerHTML=`<div><span class="eyebrow">Swap, step 2</span><h3>${esc(PN(w.who))} gets ${esc(rangeText(w.s,w.e))}</h3></div><p class="muted">${UI.swap2start?`First day ${esc(PN(other))} gets in return: ${esc(fDL(parseDate(UI.swap2start)))}. Now tap the last day (tap the same day again for one day).`:`Now tap the first day ${esc(PN(other))} gets in return, then the last day.`}</p><div class="row"><button class="btn sm quiet" data-act="pickCancel">Cancel</button></div>`; return; }
+  if(RESULT&&UI.pick==='swap2'){ const w=UI.swap1; const other=w.who==='M'?'F':'M'; el.innerHTML=`<div><span class="eyebrow">Swap, step 2</span><h3>${esc(PN(w.who))} gets ${esc(rangeText(w.s,w.e))}</h3></div><p class="muted">${UI.swap2start?`First day ${esc(PN(other))} gets in return: ${esc(fDL(parseDate(UI.swap2start)))}. Now tap the last day (tap the same day again for one day). The days in between are included.`:`Now tap the first day ${esc(PN(other))} gets in return, then the last day; one day or several.`}</p><div class="row"><button class="btn sm quiet" data-act="pickCancel">Cancel</button></div>`; return; }
   if(RESULT&&UI.range){ const r=UI.range; let hM=0,hF=0,n=0; for(let t=parseDate(r.s);t<=parseDate(r.e);t=addD(t,1)){ const i=dayCell(ymd(t)); n++; if(i){hM+=i.m;hF+=i.f;} }
     el.innerHTML=`<div><span class="eyebrow">Selected days</span><h3>${esc(rangeText(r.s,r.e))}</h3></div>
    <dl class="kv"><dt>Days</dt><dd>${n}</dd><dt>Now with</dt><dd>${hM?`<span class="who M">${esc(PN('M'))}</span> ${fmt1(hM/24)} day${hM===24?'':'s'}`:''}${hM&&hF?', ':''}${hF?`<span class="who F">${esc(PN('F'))}</span> ${fmt1(hF/24)} day${hF===24?'':'s'}`:''}</dd></dl>
@@ -541,7 +550,8 @@ function renderPanel(){
    <div class="row">
      ${xs.map(x=>`<button class="btn sm" data-act="changeExchange" data-arg="${x.t}">Change the ${hm(x.t)} exchange</button>`).join('')}
      <button class="btn sm" data-act="addVacHere" data-arg="${UI.sel}">Add a vacation here</button>
-     <button class="btn sm" data-act="giveHere" data-arg="${UI.sel}">Give this day to a parent</button><button class="btn sm" data-act="swapHere" data-arg="${UI.sel}">Swap this day for another</button><button class="btn sm" data-act="pickRange">Select more days</button>
+     <button class="btn sm" data-act="giveHere" data-arg="${UI.sel}">Give this day to a parent</button><button class="btn sm" data-act="swapHere" data-arg="${UI.sel}">Swap this day</button><button class="btn sm" data-act="pickRange">Select more days</button>
+     <span class="small muted" style="flex-basis:100%">To give or swap several days, press Select more days, tap the last day, then choose the action; a swap then asks for the first and last day received in return.</span>
      <button class="btn sm quiet" data-go="set" data-sec="hol">Edit holidays</button>
    </div>
    <p class="notice">A change made from here applies to this date only. The regular schedule is not touched.</p>`;
@@ -573,15 +583,21 @@ const SECTIONS=[
  {id:'regular',t:'Long Distance Schedule',s:()=>regularText()},
  {id:'local',t:'Local Schedule',s:()=>localText()},
  {id:'xch',t:'Exchanges',s:()=>`${(STATE.xrules||[]).length} rule${(STATE.xrules||[]).length===1?'':'s'} for place or time`},
- {id:'hol',t:'Holidays and birthdays',s:()=>`${Object.values(STATE.holidays).filter(h=>h.on).length} holidays selected`},
  {id:'vacrules',t:'Vacation rules',s:()=>`${STATE.vacations.allow.M} / ${STATE.vacations.allow.F} days a year · ${(STATE.vacations.recurring||[]).filter(r=>r.on!==false).length} recurring`},
- {id:'vac',t:'Vacations planned',s:()=>`${STATE.vacations.list.length} planned`},
- {id:'changes',t:'One-time changes',s:()=>`${STATE.changes.length} change${STATE.changes.length===1?'':'s'}`},
  {id:'limits',t:'Limits and range',s:()=>`${STATE.cal.limit} days${STATE.cal.makeup==='shift'?' · lost days added back, cycle shifts':STATE.cal.makeup==='fixed'?' · lost days added to the block':''}${STATE.cal.makeup!=='none'&&STATE.cal.makeupVac?', vacations too':''} · from ${usdStr(STATE.cal.start)} for ${STATE.cal.years} year${STATE.cal.years>1?'s':''}`},
  {id:'share',t:'Share and export',s:()=>'Link, .ics, .csv, print'},
 ];
-function renderSet(){ renderNav(); renderEdit(); const bn=$('setBanner'); bn.innerHTML=(ERR?`<div class="banner err">${esc(ERR)}</div>`:'')+ACC.banner(); }
-function renderNav(){ $('setNav').innerHTML=SECTIONS.map((x,i)=>`<button aria-selected="${x.id===UI.section}" data-sec="${x.id}"><span class="num">${i+1}</span><span><span class="t">${esc(x.t)}</span><br><span class="s">${esc(x.s())}</span></span></button>`).join(''); }
+// The Time off and changes screen: what happens on particular dates. Settings holds the mechanics.
+const TIME_SECTIONS=[
+ {id:'vac',t:'Vacations planned',s:()=>`${STATE.vacations.list.length} planned`},
+ {id:'hol',t:'Holidays and birthdays',s:()=>`${Object.values(STATE.holidays).filter(h=>h.on).length} holidays selected`},
+ {id:'changes',t:'One-time changes and swaps',s:()=>`${STATE.changes.length} change${STATE.changes.length===1?'':'s'}`},
+];
+const TIME_IDS=TIME_SECTIONS.map(x=>x.id);
+function placeFor(sec){ return TIME_IDS.includes(sec)?'time':'set'; }
+function sectionsFor(place){ return place==='time'?TIME_SECTIONS:SECTIONS; }
+function renderSet(place){ place=place||UI.place; const list=sectionsFor(place); const cur=place==='time'?UI.tsection:UI.section; if(!list.some(x=>x.id===cur)){ if(place==='time')UI.tsection=list[0].id; else UI.section=list[0].id; } renderNav(place); renderEdit(place); const bn=$(place==='time'?'timeBanner':'setBanner'); bn.innerHTML=(ERR?`<div class="banner err">${esc(ERR)}</div>`:'')+ACC.banner(); }
+function renderNav(place){ place=place||UI.place; const list=sectionsFor(place); const cur=place==='time'?UI.tsection:UI.section; $(place==='time'?'timeNav':'setNav').innerHTML=list.map((x,i)=>`<button aria-selected="${x.id===cur}" data-sec="${x.id}"><span class="num">${i+1}</span><span><span class="t">${esc(x.t)}</span><br><span class="s">${esc(x.s())}</span></span></button>`).join(''); }
 function fld(label,inner){ return `<div class="field"><span class="lbl">${label}</span>${inner}</div>`; }
 function inp(path,opts={}){ const v=getPath(path); const t=opts.type||'text'; if(t==='date'){ const ok=!v||parseDate(v)!==null; const d=parseDate(v); return `<span class="datebox"><input type="text" inputmode="numeric" data-b="${path}" data-t="date" value="${esc(usdStr(v))}" placeholder="MM-DD-YYYY" autocomplete="off"${ok?'':' aria-invalid="true" title="Enter the date as MM-DD-YYYY"'}><input type="date" class="pick" data-pick="${path}" value="${d!==null?ymd(d):''}" aria-label="Pick a date" title="Pick a date" tabindex="-1"></span>`; } return `<input type="${t}" data-b="${path}"${opts.num?' data-t="num"':''} value="${esc(v==null?'':v)}"${opts.ph?` placeholder="${esc(opts.ph)}"`:''}${t==='time'?' step="3600"':''}${opts.min!=null?` min="${opts.min}"`:''}${opts.max!=null?` max="${opts.max}"`:''}>`; }
 function sel(path,options,opts={}){ let v=getPath(path); if(CCEngine.ROLE_TOKENS.includes(v))v=resolveWho(v); return `<select data-b="${path}"${opts.num?' data-t="num"':''}>${options.map(([val,l])=>`<option value="${val}"${String(val)===String(v)?' selected':''}>${esc(l)}</option>`).join('')}</select>`; }
@@ -695,7 +711,7 @@ function secHtml(id){
   }
   return '';
 }
-function renderEdit(){ $('setEdit').innerHTML=secHtml(UI.section)+`<div class="foot"><span class="small muted">${ACC.isViewer()?'What-if: changes stay on this device and never reach the parents.':ACC.inFamily()?(ACC.alone()?'Changes are a draft until you save them to the shared calendar (banner above).':`Changes are a draft until you send them to ${esc(ACC.otherName())} for approval (banner above).`):'Changes apply at once and are saved in this browser.'}</span><button class="btn quiet" data-go="cal">&#8592; Back to calendar</button></div>`; }
+function renderEdit(place){ place=place||UI.place; const cur=place==='time'?UI.tsection:UI.section; $(place==='time'?'timeEdit':'setEdit').innerHTML=secHtml(cur)+`<div class="foot"><span class="small muted">${ACC.isViewer()?'What-if: changes stay on this device and never reach the parents.':ACC.inFamily()?(ACC.alone()?'Changes are a draft until you save them to the shared calendar (banner above).':`Changes are a draft until you send them to ${esc(ACC.otherName())} for approval (banner above).`):'Changes apply at once and are saved in this browser.'}</span><button class="btn quiet" data-go="cal">&#8592; Back to calendar</button></div>`; }
 
 // ===================== Setup place =====================
 const STEPS=[['Who','people'],['Long distance','regular'],['Local','local'],['Holidays','hol'],['Vacation rules','vacrules'],['Limits','limits'],['Finish','review']];
@@ -720,8 +736,8 @@ function renderSetup(){
 }
 
 // ===================== places and events =====================
-function go(p,sec){ UI.place=p; for(const k of ['cal','set','setup','acct']){ $('place-'+k).classList.toggle('on',k===p); $('tab-'+k).setAttribute('aria-selected',k===p); } if(sec)UI.section=sec; render(); window.scrollTo({top:0}); }
-function render(){ if(UI.place==='cal')renderCal(); else if(UI.place==='set')renderSet(); else if(UI.place==='acct')ACC.render(); else renderSetup(); }
+function go(p,sec){ if(sec&&(p==='set'||p==='time'))p=placeFor(sec); UI.place=p; for(const k of ['cal','time','set','setup','acct']){ $('place-'+k).classList.toggle('on',k===p); $('tab-'+k).setAttribute('aria-selected',k===p); } if(sec){ if(placeFor(sec)==='time')UI.tsection=sec; else UI.section=sec; } render(); window.scrollTo({top:0}); }
+function render(){ if(UI.place==='cal')renderCal(); else if(UI.place==='set'||UI.place==='time')renderSet(UI.place); else if(UI.place==='acct')ACC.render(); else renderSetup(); }
 function rerender(){ rebuild(); render(); }
 
 function patArr(){ return String(STATE.regular.pattern||'').split(/[,\s/-]+/).filter(Boolean); }
@@ -741,7 +757,7 @@ document.addEventListener('click',async e=>{
   const b=e.target.closest('button,input[type=checkbox][data-act]'); if(!b)return;
   if(b.dataset.acct){ ACC.action(b.dataset.acct,b.dataset.arg,b); return; }
   if(b.dataset.go){ go(b.dataset.go,b.dataset.sec); return; }
-  if(b.dataset.sec&&!b.dataset.act){ UI.section=b.dataset.sec; if(UI.place!=='set')go('set'); else {renderSet();window.scrollTo({top:0});} return; }
+  if(b.dataset.sec&&!b.dataset.act){ const sec=b.dataset.sec, pl=placeFor(sec); if(pl==='time')UI.tsection=sec; else UI.section=sec; if(UI.place!==pl)go(pl); else {renderSet(pl);window.scrollTo({top:0});} return; }
   if(b.dataset.view){ setView(b.dataset.view); return; }
   if(b.dataset.day){ const k=b.dataset.day;
     if(UI.pick==='swap2'){ if(!UI.swap2start){ UI.swap2start=k; } else { const s=UI.swap2start<k?UI.swap2start:k, e=UI.swap2start<k?k:UI.swap2start; finishSwap(s,e); return; } renderMonth(); renderPanel(); return; }
