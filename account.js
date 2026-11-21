@@ -136,14 +136,14 @@ const ACC = (() => {
     A.msg = `Edit the dates or times in the day panel, then send. Sending answers ${E(otherName())}'s proposal with your version.`;
     go('cal');
   }
-  // OFW text for a proposal (the request) or for its answer.
+  // Message text for a proposal (the request) or for its answer.
   function ofwFor(p, answer) {
     const S = A.approved || STATE; const by = A.me.members.find((m) => m.id === p.proposed_by); const from = by ? by.role : null; const to = from ? (from === 'M' ? 'F' : 'M') : null;
     const item = p.payload && p.payload.item; const isChange = !!item && (p.kind === 'change' || p.kind === 'care');
     const ch = isChange ? item : { kind: 'give' };
     const opts = { from, to, answerBy: p.answer_by || '', note: p.note || '' };
     if (!isChange) opts.what = p.summary;
-    if (p.kind === 'care') { opts.care = true; opts.kindName = 'First option to care'; opts.section = 'Section II.I, First Option to Care'; opts.from = p.payload.away || from; opts.to = opts.from === 'M' ? 'F' : 'M'; }
+    if (p.kind === 'care') { opts.care = true; opts.kindName = 'First option to care'; opts.section = 'first option to care'; opts.from = p.payload.away || from; opts.to = opts.from === 'M' ? 'F' : 'M'; }
     if (answer) {
       const dm = A.me.members.find((m) => m.id === p.decided_by); opts.from = dm ? dm.role : to; opts.note = p.decided_note || '';
       opts.answer = p.status === 'approved' ? 'approve' : p.status === 'declined' ? 'decline' : p.status === 'countered' ? 'counter' : 'withdraw';
@@ -153,7 +153,7 @@ const ACC = (() => {
   }
   async function careRequest(d) {
     const me = A.me.me; const o = other(); if (!o) throw new Error('The other parent has not joined yet.');
-    const summary = `${roleName(me.role)} will be away ${usdStr(d.s)} ${d.sh} to ${usdStr(d.e)} ${d.eh}; first option to care offered to ${roleName(o.role)} (Parenting Plan II.I)`;
+    const summary = `${roleName(me.role)} will be away ${usdStr(d.s)} ${d.sh} to ${usdStr(d.e)} ${d.eh}; first option to care offered to ${roleName(o.role)}`;
     const body = { kind: 'care', payload: { s: d.s, sh: d.sh, e: d.e, eh: d.eh, note: d.note || '' }, summary, note: d.note || '' }; if (d.answer_by) body.answer_by = d.answer_by;
     const r = await api('POST', '/api/cc/proposals', body); A.me = Object.assign({ user: A.me.user }, r); adoptApproved(r.family.settings); computeProposalMarks();
     A.msg = `Sent. ${roleName(o.role)} can take the time (it becomes their parenting time) or decline; either way the record keeps it.`; A.view = 'dash';
@@ -278,7 +278,7 @@ const ACC = (() => {
     else if (p.status === 'open' && !mine) actions = A.declineFor === p.id ? `<form class="row" data-acct-form="decline" data-id="${p.id}"><input name="note" required placeholder="One-line reason" autofocus style="flex:1;min-width:160px"><button class="btn sm" type="submit">Decline</button><button class="btn sm quiet" type="button" data-acct="declineCancel">Cancel</button></form>` : `<span class="row"><button class="btn sm primary" data-acct="approve" data-arg="${p.id}">${p.kind === 'care' ? 'Take the time' : 'Approve'}</button><button class="btn sm" data-acct="decline" data-arg="${p.id}">Decline</button>${(p.kind === 'change' || p.kind === 'vacation' || p.kind === 'care') && p.payload && p.payload.item ? `<button class="btn sm" data-acct="counter" data-arg="${p.id}">Counter</button>` : ''}</span>`;
     else if (p.status === 'open' && mine) actions = `<span class="row"><button class="btn sm quiet" data-acct="withdraw" data-arg="${p.id}">Withdraw</button></span>`;
     else actions = '';
-    const ofwBlocks = `<details class="ofw"><summary>OFW request</summary><pre>${E(ofwFor(p, false))}</pre><button class="btn sm" data-acct="ofw" data-arg="${p.id}">Copy for OFW</button></details>${p.decided_by || p.status === 'expired' ? `<details class="ofw"><summary>OFW answer</summary><pre>${E(ofwFor(p, true))}</pre><button class="btn sm" data-acct="ofwAnswer" data-arg="${p.id}">Copy for OFW</button></details>` : ''}`;
+    const ofwBlocks = `<details class="ofw"><summary>Message text</summary><pre>${E(ofwFor(p, false))}</pre><button class="btn sm" data-acct="ofw" data-arg="${p.id}">Copy message</button></details>${p.decided_by || p.status === 'expired' ? `<details class="ofw"><summary>Answer text</summary><pre>${E(ofwFor(p, true))}</pre><button class="btn sm" data-acct="ofwAnswer" data-arg="${p.id}">Copy message</button></details>` : ''}`;
     const rep = p.replaces ? A.me.proposals.find((q) => q.id === p.replaces) : null; const replacesText = rep ? `<br>Counter-offer to: ${E(rep.summary)}` : '';
     const answerBy = p.answer_by ? ` · answer by ${E(usdStr(p.answer_by))}${p.status === 'open' && !mine ? ' (closes on its own after that day)' : ''}` : '';
     const dm = A.me.members.find((m) => m.id === p.decided_by); const decided = p.decided_at ? `<br>${E(p.status)}${dm ? ` by ${E(roleName(dm.role))}` : ''} ${fDT(parseDateTime(p.decided_at))}${p.decided_note ? `: "${E(p.decided_note)}"` : ''}` : '';
@@ -299,7 +299,7 @@ const ACC = (() => {
       ${forMe.length ? `<div class="panel"><div class="row" style="justify-content:space-between"><h3>Needs your approval</h3><span class="pill w">${forMe.length}</span></div><div class="list">${forMe.map((p) => propItem(p, false)).join('')}</div><p class="small muted">Approving applies the change to both calendars at once and writes it to the record. Declining asks for a one-line reason the other parent sees. Nothing is approved by silence.</p></div>` : ''}
       ${mine.length ? `<div class="panel"><h3>Waiting for ${E(otherName())}</h3><div class="list">${mine.map((p) => propItem(p, true)).join('')}</div></div>` : ''}
       <div class="panel"><h3>Make a change</h3><p class="small muted">Edit the calendar as usual: tap a day to move an exchange, swap it, add a vacation or give a day; or change settings. The edits stay a draft on this device until you send them${o ? ` to ${E(otherName())}` : ''}.</p><div class="row"><button class="btn" data-go="cal">Open the calendar</button><button class="btn" data-go="set">Open settings</button></div></div>
-      ${o ? `<div class="panel"><h3>Away for more than eight hours? Offer the time first</h3><p class="small muted">The plan (II.I, First Option to Care) says a parent away from the child for more than eight hours during their time offers the other parent the first option to care. This sends that offer; if ${E(otherName())} takes it, the time becomes theirs on the calendar; if not, the record shows the offer was made.</p>
+      ${o ? `<div class="panel"><h3>Away during your time? Offer it first</h3><p class="small muted">Many parenting plans give the other parent the first option to care for the child when a parent will be away for longer than a set number of hours. This sends that offer; if ${E(otherName())} takes it, the time becomes theirs on the calendar; if not, the record shows the offer was made.</p>
         <form class="form tight" data-acct-form="care"><div class="field"><span class="lbl">Away from</span><input type="date" name="s" required></div><div class="field"><span class="lbl">at</span><input type="time" name="sh" value="17:00" step="900" required></div><div class="field"><span class="lbl">Until</span><input type="date" name="e" required></div><div class="field"><span class="lbl">at</span><input type="time" name="eh" value="10:00" step="900" required></div><div class="field"><span class="lbl">Note (optional)</span><input name="note" placeholder="Work trip"></div><div class="field"><span class="lbl">Answer by (optional)</span><input type="date" name="answer_by"></div><div class="field"><span class="lbl">&nbsp;</span><button class="btn sm primary" type="submit">Offer the time to ${E(otherName())}</button></div></form></div>` : ''}
       <div class="grid2">
         <div class="panel"><h3>Shared calendar URL</h3><p class="small muted">A private URL that updates itself when a change is approved. Add it once to Apple Calendar, Google Calendar, Proton Calendar or Outlook (subscribe to a calendar by URL). Anyone with the URL can read the calendar; make a new one if it leaks.</p>${(()=>{ const base=`${location.origin}/api/cc/feed/${A.me.me.feed}.ics`; const S0=A.approved||STATE; return `<input class="mono small" readonly id="feedUrl" value="${E(base)}" style="width:100%;font:inherit;font-family:var(--mono);font-size:12px;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink)"><div class="row" style="margin-top:8px"><button class="btn sm" data-acct="copyFeed">Copy URL</button><button class="btn sm quiet" data-acct="rotate">Make a new URL</button></div>
@@ -382,8 +382,8 @@ const ACC = (() => {
       case 'discard': discardDraft(); if (UI.place === 'acct') render(); else rerender(); return;
       case 'approve': run(() => decide(arg, 'approve', '')); return;
       case 'counter': startCounter(arg); return;
-      case 'ofw': { const p = A.me.proposals.find((q) => q.id === arg); if (p) copy(ofwFor(p, false), 'OFW text copied. Paste it into an OFW message.'); return; }
-      case 'ofwAnswer': { const p = A.me.proposals.find((q) => q.id === arg); if (p) copy(ofwFor(p, true), 'OFW answer text copied.'); return; }
+      case 'ofw': { const p = A.me.proposals.find((q) => q.id === arg); if (p) copy(ofwFor(p, false), 'Message text copied.'); return; }
+      case 'ofwAnswer': { const p = A.me.proposals.find((q) => q.id === arg); if (p) copy(ofwFor(p, true), 'Answer text copied.'); return; }
       case 'decline': A.declineFor = arg; render(); return;
       case 'declineCancel': A.declineFor = null; render(); return;
       case 'withdraw': run(() => decide(arg, 'withdraw', '')); return;
