@@ -132,9 +132,9 @@ const ACC = (() => {
     const item = clone(p.payload.item);
     if (p.kind === 'vacation') { STATE.vacations = STATE.vacations || {}; STATE.vacations.list = (STATE.vacations.list || []).filter((v) => v.id !== item.id); STATE.vacations.list.push(item); }
     else { STATE.changes = (STATE.changes || []).filter((c) => c.id !== item.id); STATE.changes.push(item); }
-    A.counterOf = id; UI.openChg = item.id; rebuild();
-    A.msg = `Edit the dates or times, then send. Sending answers ${E(otherName())}'s proposal with your version.`;
-    go('set', p.kind === 'vacation' ? 'vac' : 'changes');
+    A.counterOf = id; UI.openChg = item.id; UI.lastItem = { list: p.kind === 'vacation' ? 'vacations' : 'changes', id: item.id }; const d0 = item.s || item.date || (item.a && item.a.s); if (d0) UI.sel = d0; rebuild();
+    A.msg = `Edit the dates or times in the day panel, then send. Sending answers ${E(otherName())}'s proposal with your version.`;
+    go('cal');
   }
   // OFW text for a proposal (the request) or for its answer.
   function ofwFor(p, answer) {
@@ -219,12 +219,12 @@ const ACC = (() => {
     const tag = document.querySelector('.brand .tag'); if (tag) tag.textContent = isViewer() ? `read-only view of ${E(roleName('M'))} and ${E(roleName('F'))}'s calendar` : inFamily() ? `shared with ${E(otherName())}` : 'works without an account; sign in to share it with the other parent';
   }
   // Banner shown on the Calendar and Settings places while a draft is unsent or a proposal waits.
-  function banner() {
+  function banner(place) {
     if (!A.ready || !inFamily()) return '';
     let h = '';
     if (isViewer()) { if (isDirty()) h += `<div class="banner draft"><span><b>What-if.</b> These changes exist only on this device. The parents' shared calendar is unchanged, and viewers cannot change it.</span><span class="row"><button class="btn sm" data-acct="discard">Back to the shared calendar</button></span></div>`; return h; }
     if (isDirty()) { const n = draftProposals().length; h += `<div class="banner draft"><span><b>Draft.</b> ${n === 1 ? 'One change' : n + ' changes'} on this device ${alone() ? 'not yet saved to the shared calendar' : `not yet sent to ${E(otherName())}`}.</span><span class="row"><button class="btn sm primary" data-acct="send">${alone() ? 'Save to the shared calendar' : `Send to ${E(otherName())} for approval`}</button><button class="btn sm quiet" data-acct="discard">Discard</button></span></div>`; }
-    const n = needsMe().length; if (n) h += `<div class="banner"><span>${n === 1 ? 'A proposal from' : n + ' proposals from'} ${E(otherName())} ${n === 1 ? 'needs' : 'need'} your answer.</span><button class="btn sm" data-go="acct">Open the dashboard</button></div>`;
+    const n = needsMe().length; if (n && place !== 'cal') h += `<div class="banner"><span>${n === 1 ? 'A proposal from' : n + ' proposals from'} ${E(otherName())} ${n === 1 ? 'needs' : 'need'} your answer.</span><button class="btn sm" data-go="acct">Open the dashboard</button></div>`;
     if (!A.me.me.confirmed) h += `<div class="banner"><span>You have not confirmed this schedule yet. It is in force as it stands.</span><button class="btn sm" data-acct="view" data-arg="confirm">Review and confirm</button></div>`;
     return h;
   }
@@ -410,5 +410,7 @@ const ACC = (() => {
   }
   document.addEventListener('submit', (e) => { const f = e.target.closest('form[data-acct-form]'); if (!f) return; e.preventDefault(); form(f); });
 
-  return { A, init, render, banner, action, publish, pubInfo, inFamily, isViewer, isDirty, alone, otherName, needsMe, updateTab, propDays: () => A.propDays, signedIn: () => !!A.auth };
+  // Proposals that need this parent's answer, as cards with Approve, Decline and Counter, for the calendar screen.
+  function needsMeHtml() { if (!A.ready || !inFamily() || isViewer()) return ''; const list = needsMe(); if (!list.length) return ''; return `<div class="acct" style="margin-bottom:12px"><div class="panel"><div class="row" style="justify-content:space-between"><h3>Needs your answer</h3><span class="pill w">${list.length}</span></div><div class="list">${list.map((p) => propItem(p, false)).join('')}</div><p class="small muted">Approving applies the change to both calendars and writes it to the record. Nothing is approved by silence.</p></div></div>`; }
+  return { A, init, render, banner, needsMeHtml, action, publish, pubInfo, inFamily, isViewer, isDirty, alone, otherName, needsMe, updateTab, propDays: () => A.propDays, signedIn: () => !!A.auth };
 })();
