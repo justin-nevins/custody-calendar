@@ -183,11 +183,13 @@ input[aria-invalid=true]{border-color:var(--warn);outline:2px solid var(--warn-s
 .form{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
 .form.four{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 .form.tight{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
-.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field{display:flex;flex-direction:column;justify-content:flex-end;gap:4px;min-width:0}
+.field.check{justify-content:flex-start}
 .field label,.field .lbl{font-size:13px;color:var(--ink-2);font-weight:700}
 .field input,.field select,.field textarea{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-width:0;width:100%}
 .field.check{flex-direction:row;align-items:center;gap:8px}
-.field.check input{width:18px;height:18px}
+.field.check input,label.check input{flex:0 0 18px;width:18px;height:18px;margin:0}
+label.check{display:inline-flex;align-items:center;gap:6px}
 .help{font-size:13px;color:var(--ink-2)}
 details.ofw{margin-top:6px;font-size:13px} details.ofw summary{cursor:pointer;color:var(--ink-2)} details.ofw pre{white-space:pre-wrap;font:inherit;font-size:13px;line-height:1.45;margin:6px 0;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink)}
 .help summary{cursor:pointer;color:var(--accent);font-weight:700}
