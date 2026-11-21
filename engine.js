@@ -79,7 +79,7 @@ const PLANSET={mothers:{who:'mother',before:2,after:1,start:'17:00',end:'10:00'}
 const WEEKLY_PLAN=[{week:1,parent:'father',sd:4,st:'17:00',ed:1,et:'09:00'},{week:2,parent:'father',sd:4,st:'12:00',ed:5,et:'17:00'}];
 // Parents are two slots, M and F (the keys never change so saved settings stay valid). Each slot has a role:
 // mother, father or parent. Plan defaults are written in role words (mother, father, motherOdd, motherEven) and
-// resolved to a slot through the roles, so naming Parent 1 "Justin" and marking him the father moves every
+// resolved to a slot through the roles, so naming Parent 1 and marking that parent the father moves every
 // default with him. Saved choices a user made by hand are slot codes (M, F, Modd, Meven) and stay as chosen.
 const ROLE_TOKENS=['mother','father','motherOdd','motherEven'];
 function roles(S){ const p=(S&&S.parents)||{}; const rM=(p.M&&p.M.role)||'mother', rF=(p.F&&p.F.role)||'father'; return {mother:rM==='mother'?'M':rF==='mother'?'F':null, father:rF==='father'?'F':rM==='father'?'M':null}; }
@@ -146,7 +146,7 @@ function computeSchedule(c){
   for(let y=y0-1;y<=y0+years;y++){
     for(const h of CAT){ const cfg=c.holidays&&c.holidays[h.id]; if(!cfg||!cfg.on)continue; const entry=(c.names&&c.names[h.id])?{...h,name:c.names[h.id]}:h; for(const p of periodsFor(entry,cfg,y,h.rule(y)))periods.push(p); }
     for(const [id,cfg] of Object.entries(c.birthdays||{})){ if(!cfg||!cfg.on)continue; const m=/^(\d{1,2})-(\d{1,2})$/.exec((cfg.md||'').trim()); const day=m?utc(y,+m[1],+m[2]):null; for(const p of periodsFor({name:cfg.name||'Birthday',pri:1},cfg,y,day))periods.push(p); }
-    // Recurring vacation time: a period a parent has every year (the plan's first two weeks of February and May).
+    // Recurring vacation time: a period a parent has every year (for example the first two weeks of a month).
     // A recurring vacation is `days` full 24-hour periods from its start time: 14 days from Feb 1 12:00 ends Feb 15 12:00.
     for(const rv of (c.recurring||[])){ if(!rv||rv.on===false)continue; const m=/^(\d{1,2})-(\d{1,2})$/.exec((rv.md||'').trim()); const day=m?utc(y,+m[1],+m[2]):null; if(day===null)continue; const s=day+parseHours(rv.start||'00:00')*HOUR, e=s+Math.max(1,+rv.days||1)*DAYMS; periods.push({s,e,who:whoFor(rv.who,y),name:rv.name||'Vacation',pri:3,applies:rv.applies||'both',kind:'vacation'}); }
   }
@@ -352,7 +352,7 @@ function changeHours(ch){
   return h;
 }
 function hoursText(n){ return n>=24&&n%24===0?`${n/24} day${n===24?'':'s'}`:n>=24?`${fmt1(n/24)} days`:`${fmt1(n)} hour${n===1?'':'s'}`; }
-// One-line text of a change, with MM-DD-YYYY dates; shared by the page, the account layer and the OFW text.
+// One-line text of a change, with MM-DD-YYYY dates; shared by the page, the account layer and the message text.
 function changeSummary(S,ch){
   const PN=k=>slotName(S,k); const d=(x,t)=>`${usdStr(x)} ${t||''}`.trim();
   let s;
@@ -363,23 +363,22 @@ function changeSummary(S,ch){
   if(ch.repeatUntil)s+=`; repeats weekly until ${usdStr(ch.repeatUntil)}`;
   return s;
 }
-// Text to paste into OFW for a change request or an answer (the plan requires requests between the parents through
-// OFW). opts: {from, to: slot keys or names, answer:'approve'|'decline'|'counter'|'withdraw', note, answerBy}.
+// Message text for a change request or an answer, to paste into the parents' messaging app or an email. opts: {from, to: slot keys or names, answer:'approve'|'decline'|'counter'|'withdraw', note, answerBy}.
 function ofwText(S,ch,opts={}){
   const PN=k=>(k==='M'||k==='F')?slotName(S,k):(k||'');
   const L=[];
-  const what=opts.what||changeSummary(S,ch); const kindName=opts.kindName||(ch.kind==='swap'?'Swap of parenting time':ch.kind==='move'?'Moved exchange':ch.kind==='give'?'Parenting time given':'Schedule change'); const section=opts.section||'Section II.F, Schedule Changes';
+  const what=opts.what||changeSummary(S,ch); const kindName=opts.kindName||(ch.kind==='swap'?'Swap of parenting time':ch.kind==='move'?'Moved exchange':ch.kind==='give'?'Parenting time given':'Schedule change'); const section=opts.section||'schedule change';
   if(opts.answer){
     const verb=opts.answer==='approve'?'agrees to':opts.answer==='decline'?'does not agree to':opts.answer==='counter'?'proposes instead of':'withdraws';
-    L.push(`Re: ${kindName} (Parenting Plan, ${section})`,'',`${PN(opts.from)||'I'} ${verb} the request: ${what}.`);
+    L.push(`Re: ${kindName} (${section})`,'',`${PN(opts.from)||'I'} ${verb} the request: ${what}.`);
     if(opts.answer==='counter'&&opts.counter)L.push(`Proposed instead: ${changeSummary(S,opts.counter)}.`);
   } else {
-    if(opts.care)L.push(`Notice: ${kindName} (Parenting Plan, ${section})`,'',`${PN(opts.from)||'I'} will be away from the child for more than eight hours during ${PN(opts.from)?'their':'my'} parenting time: ${what}. ${PN(opts.to)||'The other parent'} has the first option to care for the child during that time.`);
-    else { L.push(`Request: ${kindName} (Parenting Plan, ${section})`,'',`${PN(opts.from)||'I'} ask${PN(opts.from)?'s':''} ${PN(opts.to)||'the other parent'} to agree to this one-time change: ${what}.`); L.push('The regular schedule is not changed. Holiday, vacation and special-day periods stay as they are.'); }
+    if(opts.care)L.push(`Notice: ${kindName} (${section})`,'',`${PN(opts.from)||'I'} will be away from the child during ${PN(opts.from)?'their':'my'} parenting time: ${what}. ${PN(opts.to)||'The other parent'} has the first option to care for the child during that time.`);
+    else { L.push(`Request: ${kindName} (${section})`,'',`${PN(opts.from)||'I'} ask${PN(opts.from)?'s':''} ${PN(opts.to)||'the other parent'} to agree to this one-time change: ${what}.`); L.push('The regular schedule is not changed. Holiday, vacation and special-day periods stay as they are.'); }
     if(opts.answerBy)L.push(`An answer by ${usdStr(opts.answerBy)} would help with planning.`);
   }
   if(opts.note||ch.note)L.push(`Reason: ${opts.note||ch.note}.`);
-  if(!opts.answer)L.push('Please answer through OFW. Thank you.');
+  if(!opts.answer)L.push('Please answer in writing. Thank you.');
   return L.join('\n');
 }
 // Both calendars from one settings object: base (no one-time changes) and result (with them).
@@ -411,7 +410,7 @@ function applyProposal(settings,kind,payload){
   return s;
 }
 // What differs between two settings objects, by section, plus the items added, edited or removed.
-const SECTION_KEYS={people:s=>[s.parents,s.children,s.pbd],regular:s=>[s.regular],local:s=>[s.phase.weeklyOn,s.phase.weekAnchor,s.phase.weeksPerCycle,s.phase.weekly],change:s=>[s.phase.begins,s.phase.move,s.phase.movePre,s.phase.ldDate,s.phase.ldEnd],hol:s=>[s.holidays,s.customs],vac:s=>[s.vacations&&s.vacations.allow,s.vacations&&s.vacations.notice,s.vacations&&s.vacations.maxLen,s.vacations&&s.vacations.recurring,s.vacations&&s.vacations.bridge,s.vacations&&s.vacations.fit],limits:s=>[s.cal],xch:s=>[s.xrules||[]]};
+const SECTION_KEYS={people:s=>[s.parents,s.children,s.pbd],regular:s=>[s.regular],local:s=>[s.phase.weeklyOn,s.phase.weekAnchor,s.phase.weeksPerCycle,s.phase.weekly],change:s=>[s.phase.begins,s.phase.move,s.phase.movePre,s.phase.ldDate,s.phase.ldEnd],hol:s=>[s.holidays,s.customs],vac:s=>[s.vacations&&s.vacations.allow,s.vacations&&s.vacations.notice,s.vacations&&s.vacations.maxLen,s.vacations&&s.vacations.recurring,s.vacations&&s.vacations.bridge,s.vacations&&s.vacations.fit,s.vacations&&s.vacations.attach,s.vacations&&s.vacations.gapDays,s.vacations&&s.vacations.where],limits:s=>[s.cal],xch:s=>[s.xrules||[]]};
 // JSON with sorted keys, so the same settings compare equal whichever side built the object.
 function stable(x){ if(x===undefined)return 'null'; if(x===null||typeof x!=='object')return JSON.stringify(x); if(Array.isArray(x))return '['+x.map(stable).join(',')+']'; return '{'+Object.keys(x).sort().map(k=>x[k]===undefined?null:JSON.stringify(k)+':'+stable(x[k])).filter(Boolean).join(',')+'}'; }
 function diffSettings(a,b){
@@ -433,12 +432,12 @@ function parentColor(S,k){ const c=S&&S.parents&&S.parents[k]&&S.parents[k].colo
 // opts.S: settings (exchange places, parent colors). opts.who: 'M' or 'F' gives only that parent's blocks, plus every
 // exchange (both parents are at each one), so each parent's time can be its own calendar with its own color and the
 // exchange times still show when only one calendar is loaded.
-// "Sheigh with Justin" when the settings name the child (several names joined with "and"); "With Justin" otherwise.
+// "<child> with <parent>" when the settings name the child (several names joined with "and"); "With <parent>" otherwise.
 function childLabel(S){ const names=((S&&S.children)||[]).map(c=>(c&&c.name||'').trim()).filter(Boolean); if(!names.length)return ''; return names.length===1?names[0]:names.slice(0,-1).join(', ')+' and '+names[names.length-1]; }
 function icsText(r,names,opts={}){
   const PN=k=>names[k]||k; const child=childLabel(opts.S); const withT=k=>child?`${child} with ${PN(k)}`:`With ${PN(k)}`; const stamp=icsDate(opts.stamp||Date.now())+'Z'; const who=opts.who==='M'||opts.who==='F'?opts.who:null;
   const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//custody-calendar.com//planner//EN','CALSCALE:GREGORIAN'];
-  // Calendar names as they appear in the subscribing app: "Justin Custody" for a parent's calendar, "Sheigh Custody"
+  // Calendar names as they appear in the subscribing app: "<parent> Custody" for a parent's calendar, "<child> Custody"
   // (or the given name) for the full one.
   const name=opts.name?(who?`${PN(who)} Custody`:(child?`${child} Custody`:opts.name)):'';
   if(name)L.push('X-WR-CALNAME:'+icsEsc(name),'NAME:'+icsEsc(name));
